@@ -14,6 +14,13 @@ import resourcesRoutes from './routes/resources'
 import risksRoutes from './routes/risks'
 import budgetRoutes from './routes/budget'
 import reportsRoutes from './routes/reports'
+import commentsRoutes from './routes/comments'
+import timetrackingRoutes from './routes/timetracking'
+import sprintsRoutes from './routes/sprints'
+import notificationsRoutes from './routes/notifications'
+import templatesRoutes from './routes/templates'
+import searchRoutes from './routes/search'
+import exportRoutes from './routes/export'
 
 initializeDatabase()
 
@@ -43,6 +50,13 @@ app.use('/api/resources', resourcesRoutes)
 app.use('/api/risks', risksRoutes)
 app.use('/api/budget', budgetRoutes)
 app.use('/api/reports', reportsRoutes)
+app.use('/api/comments', commentsRoutes)
+app.use('/api/time', timetrackingRoutes)
+app.use('/api/sprints', sprintsRoutes)
+app.use('/api/notifications', notificationsRoutes)
+app.use('/api/templates', templatesRoutes)
+app.use('/api/search', searchRoutes)
+app.use('/api/export', exportRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

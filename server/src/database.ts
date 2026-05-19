@@ -172,9 +172,45 @@ export function initializeDatabase() {
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS sprints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      goal TEXT,
+      start_date DATE,
+      end_date DATE,
+      status TEXT DEFAULT 'planned',
+      velocity INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      entity_type TEXT,
+      entity_id INTEGER,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS project_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      category TEXT DEFAULT 'custom',
+      template_data TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id),
+      is_system INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   seedDatabase()
+  seedNewData()
 }
 
 function seedDatabase() {
@@ -409,4 +445,121 @@ function seedDatabase() {
   })()
 
   console.log('Database seeded successfully with demo data')
+}
+
+function seedNewData() {
+  // Seed sprints if none exist
+  const sprintCount = (db.prepare('SELECT COUNT(*) as c FROM sprints').get() as { c: number }).c
+  if (sprintCount > 0) return
+
+  const projects = db.prepare("SELECT id FROM projects WHERE status = 'active' LIMIT 4").all() as Array<{ id: number }>
+  if (!projects.length) return
+
+  const insertSprint = db.prepare(`INSERT INTO sprints (project_id, name, goal, start_date, end_date, status, velocity) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+
+  const sprintData = [
+    [projects[0].id, 'Sprint 1', 'Complete authentication and core navigation', '2026-01-15', '2026-01-29', 'completed', 34],
+    [projects[0].id, 'Sprint 2', 'Implement dashboard and profile views', '2026-01-29', '2026-02-12', 'completed', 42],
+    [projects[0].id, 'Sprint 3', 'API integration and data display', '2026-02-12', '2026-02-26', 'completed', 38],
+    [projects[0].id, 'Sprint 4', 'Testing and bug fixes', '2026-03-01', '2026-03-15', 'completed', 29],
+    [projects[0].id, 'Sprint 5', 'Performance optimization and deployment prep', '2026-04-01', '2026-04-15', 'active', 0],
+    [projects[1].id, 'Sprint 1 - Discovery', 'Architecture assessment and planning', '2026-02-01', '2026-02-15', 'completed', 21],
+    [projects[1].id, 'Sprint 2 - Infrastructure', 'SAP environment setup', '2026-02-15', '2026-03-01', 'active', 0],
+    [projects[2].id, 'Iteration 1', 'Data ingestion pipeline', '2026-01-01', '2026-02-01', 'completed', 55],
+    [projects[2].id, 'Iteration 2', 'Transformation layer', '2026-02-01', '2026-03-15', 'completed', 48],
+    [projects[2].id, 'Iteration 3', 'BI reporting', '2026-03-15', '2026-05-01', 'active', 0],
+  ]
+  db.transaction(() => { for (const d of sprintData) insertSprint.run(...d as Parameters<typeof insertSprint.run>) })()
+
+  // Seed system templates
+  const templateCount = (db.prepare('SELECT COUNT(*) as c FROM project_templates').get() as { c: number }).c
+  if (templateCount > 0) return
+
+  const insertTemplate = db.prepare(`INSERT INTO project_templates (name, description, category, template_data, is_system) VALUES (?, ?, ?, ?, 1)`)
+
+  const templates = [
+    ['Software Development', 'Standard agile software development project', 'software', JSON.stringify({
+      defaultPhase: 'planning',
+      tasks: [
+        { name: 'Requirements Gathering', priority: 'high', estimated_hours: 40, wbs_code: '1.0' },
+        { name: 'System Design', priority: 'high', estimated_hours: 80, wbs_code: '2.0' },
+        { name: 'Development - Sprint 1', priority: 'high', estimated_hours: 160, wbs_code: '3.0' },
+        { name: 'Development - Sprint 2', priority: 'high', estimated_hours: 160, wbs_code: '4.0' },
+        { name: 'Testing & QA', priority: 'high', estimated_hours: 80, wbs_code: '5.0' },
+        { name: 'User Acceptance Testing', priority: 'medium', estimated_hours: 40, wbs_code: '6.0' },
+        { name: 'Deployment', priority: 'critical', estimated_hours: 20, wbs_code: '7.0' },
+        { name: 'Post-Launch Support', priority: 'medium', estimated_hours: 40, wbs_code: '8.0' },
+      ],
+      milestones: [
+        { name: 'Design Approved', description: 'Architecture and design sign-off' },
+        { name: 'Alpha Release', description: 'Internal alpha version ready' },
+        { name: 'Beta Release', description: 'External beta testing begins' },
+        { name: 'Production Launch', description: 'Full production deployment' },
+      ],
+      risks: [
+        { title: 'Scope creep', category: 'schedule', probability: 'high', impact: 'medium' },
+        { title: 'Technical debt', category: 'technical', probability: 'medium', impact: 'medium' },
+        { title: 'Resource availability', category: 'resource', probability: 'medium', impact: 'high' },
+      ],
+    })],
+    ['Data Migration', 'Legacy system to modern platform data migration', 'data', JSON.stringify({
+      defaultPhase: 'planning',
+      tasks: [
+        { name: 'Data Discovery & Assessment', priority: 'critical', estimated_hours: 80, wbs_code: '1.0' },
+        { name: 'Data Mapping & Transformation Rules', priority: 'high', estimated_hours: 120, wbs_code: '2.0' },
+        { name: 'ETL Development', priority: 'high', estimated_hours: 200, wbs_code: '3.0' },
+        { name: 'Data Quality Validation', priority: 'high', estimated_hours: 80, wbs_code: '4.0' },
+        { name: 'Pilot Migration', priority: 'high', estimated_hours: 40, wbs_code: '5.0' },
+        { name: 'Full Migration Execution', priority: 'critical', estimated_hours: 80, wbs_code: '6.0' },
+        { name: 'Post-Migration Validation', priority: 'critical', estimated_hours: 60, wbs_code: '7.0' },
+        { name: 'Cutover & Go-Live', priority: 'critical', estimated_hours: 40, wbs_code: '8.0' },
+      ],
+      milestones: [
+        { name: 'Data Assessment Complete', description: 'Full inventory and quality assessment done' },
+        { name: 'ETL Ready', description: 'All transformation logic validated' },
+        { name: 'Pilot Migration Success', description: 'Test migration validated' },
+        { name: 'Go-Live', description: 'Full cutover to new system' },
+      ],
+    })],
+    ['Product Launch', 'End-to-end product launch project', 'product', JSON.stringify({
+      defaultPhase: 'initiation',
+      tasks: [
+        { name: 'Market Research', priority: 'high', estimated_hours: 60, wbs_code: '1.0' },
+        { name: 'Product Roadmap', priority: 'high', estimated_hours: 40, wbs_code: '2.0' },
+        { name: 'UX/UI Design', priority: 'high', estimated_hours: 160, wbs_code: '3.0' },
+        { name: 'MVP Development', priority: 'critical', estimated_hours: 320, wbs_code: '4.0' },
+        { name: 'Beta Testing Program', priority: 'high', estimated_hours: 80, wbs_code: '5.0' },
+        { name: 'Marketing Campaign', priority: 'high', estimated_hours: 100, wbs_code: '6.0' },
+        { name: 'Sales Enablement', priority: 'medium', estimated_hours: 60, wbs_code: '7.0' },
+        { name: 'Launch Event', priority: 'high', estimated_hours: 40, wbs_code: '8.0' },
+      ],
+      milestones: [
+        { name: 'Design Freeze', description: 'Final product designs locked' },
+        { name: 'Feature Complete', description: 'MVP feature development done' },
+        { name: 'Beta Launch', description: 'Beta program starts' },
+        { name: 'Public Launch', description: 'Product publicly available' },
+      ],
+    })],
+    ['Infrastructure Upgrade', 'IT infrastructure modernization project', 'infrastructure', JSON.stringify({
+      defaultPhase: 'planning',
+      tasks: [
+        { name: 'Current State Assessment', priority: 'high', estimated_hours: 80, wbs_code: '1.0' },
+        { name: 'Architecture Design', priority: 'high', estimated_hours: 120, wbs_code: '2.0' },
+        { name: 'Procurement', priority: 'medium', estimated_hours: 40, wbs_code: '3.0' },
+        { name: 'Environment Setup', priority: 'high', estimated_hours: 120, wbs_code: '4.0' },
+        { name: 'Migration - Phase 1', priority: 'critical', estimated_hours: 160, wbs_code: '5.0' },
+        { name: 'Migration - Phase 2', priority: 'critical', estimated_hours: 160, wbs_code: '6.0' },
+        { name: 'Testing & Validation', priority: 'high', estimated_hours: 80, wbs_code: '7.0' },
+        { name: 'Cutover', priority: 'critical', estimated_hours: 40, wbs_code: '8.0' },
+      ],
+      milestones: [
+        { name: 'Architecture Approved', description: 'Infrastructure design signed off' },
+        { name: 'Dev Environment Ready', description: 'New infrastructure running in dev' },
+        { name: 'Production Cutover', description: 'Live traffic on new infrastructure' },
+      ],
+    })],
+  ]
+
+  db.transaction(() => { for (const t of templates) insertTemplate.run(...t as Parameters<typeof insertTemplate.run>) })()
+  console.log('New tables seeded successfully')
 }

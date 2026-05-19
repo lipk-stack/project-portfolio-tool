@@ -152,7 +152,7 @@ export default function Portfolio() {
                 <h2 className="text-lg font-semibold text-gray-900">{portfolio.name}</h2>
                 {portfolio.description && <p className="text-sm text-gray-500">{portfolio.description}</p>}
               </div>
-              <div className="text-sm text-gray-500">{portProjects.length} projects · {formatCurrency(portfolio.total_budget || 0)} budget</div>
+              <div className="text-sm text-gray-500">{portProjects.length} projects</div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <table className="w-full">

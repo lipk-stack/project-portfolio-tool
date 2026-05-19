@@ -3,6 +3,8 @@ export type Priority = 'low' | 'medium' | 'high' | 'critical'
 export type Health = 'green' | 'yellow' | 'red'
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'blocked'
 export type RiskLevel = 'low' | 'medium' | 'high'
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF'
+export type SprintStatus = 'planned' | 'active' | 'completed'
 
 export interface User {
   id: number
@@ -21,11 +23,6 @@ export interface Portfolio {
   name: string
   description?: string
   owner_id: number
-  owner_name?: string
-  project_count?: number
-  active_count?: number
-  total_budget?: number
-  total_spent?: number
   created_at: string
 }
 
@@ -48,15 +45,14 @@ export interface Project {
   spent: number
   manager_id?: number
   manager_name?: string
-  manager_email?: string
   color: string
-  tags?: string[]
+  tags?: string
+  created_at: string
+  updated_at: string
   task_count?: number
   done_task_count?: number
   member_count?: number
   open_risk_count?: number
-  created_at: string
-  updated_at: string
 }
 
 export interface Task {
@@ -69,7 +65,6 @@ export interface Task {
   priority: Priority
   assignee_id?: number
   assignee_name?: string
-  assignee_email?: string
   start_date?: string
   end_date?: string
   actual_start?: string
@@ -82,10 +77,9 @@ export interface Task {
   position: number
   sprint?: string
   story_points?: number
-  tags: string[]
-  subtask_count?: number
-  done_subtask_count?: number
-  dependencies: number[]
+  tags?: string | string[]
+  dependencies?: number[]
+  children?: Task[]
   created_at: string
   updated_at: string
 }
@@ -119,6 +113,21 @@ export interface BudgetLine {
   period?: string
 }
 
+export interface TimeEntry {
+  id: number
+  task_id?: number
+  task_name?: string
+  user_id: number
+  user_name?: string
+  project_id: number
+  project_name?: string
+  project_color?: string
+  hours: number
+  date: string
+  description?: string
+  created_at: string
+}
+
 export interface Milestone {
   id: number
   project_id: number
@@ -130,17 +139,87 @@ export interface Milestone {
   project_color?: string
 }
 
-export interface ActivityItem {
+export interface Comment {
   id: number
   entity_type: string
   entity_id: number
   user_id: number
   user_name: string
-  user_email: string
+  user_email?: string
+  content: string
+  created_at: string
+}
+
+export interface Sprint {
+  id: number
+  project_id: number
+  name: string
+  goal?: string
+  start_date?: string
+  end_date?: string
+  status: SprintStatus
+  velocity: number
+  total_tasks?: number
+  done_tasks?: number
+  total_points?: number
+  completed_points?: number
+  created_at: string
+}
+
+export interface Notification {
+  id?: number
+  type: string
+  title: string
+  message: string
+  entity_type: string
+  entity_id: number
+  priority: 'high' | 'medium' | 'low'
+  is_read?: number
+  created_at: string
+}
+
+export interface ProjectTemplate {
+  id: number
+  name: string
+  description?: string
+  category: string
+  template_data: string
+  created_by?: number
+  created_by_name?: string
+  is_system: number
+  created_at: string
+}
+
+export interface SearchResult {
+  id: number
+  name: string
+  type: 'project' | 'task' | 'user' | 'risk'
+  category: string
+  status?: string
+  priority?: string
+  color?: string
+  project_id?: number
   project_name?: string
+  department?: string
+  email?: string
+  score?: number
+}
+
+export interface ActivityLog {
+  id: number
+  entity_type: string
+  entity_id: number
+  user_id: number
+  user_name?: string
   action: string
   details?: string
+  project_name?: string
   created_at: string
+}
+
+export interface ActivityItem extends ActivityLog {
+  user_name?: string
+  project_name?: string
 }
 
 export interface DashboardSummary {
@@ -156,39 +235,36 @@ export interface DashboardSummary {
     budgetUtilization: number
     openRisks: number
     highRisks: number
+    overdueTaskCount: number
+    avgVelocity: number
   }
   upcomingMilestones: Milestone[]
   recentActivity: ActivityItem[]
-  portfolioHealth: Project[]
+  portfolioHealth: Array<Project & { manager_name?: string; task_count?: number; done_count?: number }>
   resourceUtilization: ResourceSummary[]
-  weeklyHours: { date: string; total_hours: number }[]
+  weeklyHours: Array<{ date: string; total_hours: number }>
+  healthTrend: Array<{ month: string; green: number; yellow: number; red: number }>
+  insights: Array<{ type: string; title: string; message: string; severity: 'info' | 'warning' | 'critical' }>
 }
 
 export interface ResourceSummary {
   id: number
   name: string
-  email: string
-  department: string
+  department?: string
   capacity: number
   total_allocation: number
-  active_projects: number
-  projects: Array<{
+  project_count: number
+  projects?: Array<{
     project_id: number
     project_name: string
+    allocation_percent: number
     color: string
     status: string
-    role: string
-    allocation_percent: number
   }>
-  utilization_percent: number
 }
 
-export interface ProjectMember {
-  id: number
-  name: string
+export interface JwtPayload {
+  userId: number
   email: string
-  system_role: string
-  department?: string
   role: string
-  allocation_percent: number
 }

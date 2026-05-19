@@ -17,6 +17,15 @@ router.get('/summary', authenticate, (_req: Request, res: Response) => {
   const openRisks = (db.prepare("SELECT COUNT(*) as c FROM risks WHERE status = 'open'").get() as { c: number }).c
   const highRisks = (db.prepare("SELECT COUNT(*) as c FROM risks WHERE status != 'closed' AND score >= 6").get() as { c: number }).c
 
+  const overdueTaskCount = (db.prepare(`
+    SELECT COUNT(*) as c FROM tasks
+    WHERE end_date < date('now') AND status NOT IN ('done') AND end_date IS NOT NULL
+  `).get() as { c: number }).c
+
+  const avgVelocity = (db.prepare(`
+    SELECT COALESCE(AVG(velocity), 0) as avg FROM sprints WHERE status = 'completed' AND velocity > 0
+  `).get() as { avg: number }).avg
+
   const upcomingMilestones = db.prepare(`
     SELECT m.*, p.name as project_name, p.color as project_color
     FROM milestones m
@@ -67,25 +76,76 @@ router.get('/summary', authenticate, (_req: Request, res: Response) => {
     ORDER BY date ASC
   `).all()
 
+  // Health trend over last 6 months
+  const healthTrend = db.prepare(`
+    SELECT strftime('%Y-%m', updated_at) as month,
+      SUM(CASE WHEN health = 'green' THEN 1 ELSE 0 END) as green,
+      SUM(CASE WHEN health = 'yellow' THEN 1 ELSE 0 END) as yellow,
+      SUM(CASE WHEN health = 'red' THEN 1 ELSE 0 END) as red
+    FROM projects
+    WHERE updated_at >= datetime('now', '-6 months')
+    GROUP BY month ORDER BY month
+  `).all()
+
+  // Generate smart insights
+  const insights: Array<{ type: string; title: string; message: string; severity: string }> = []
+
+  const overBudgetProjects = db.prepare(`
+    SELECT name, budget, spent FROM projects WHERE budget > 0 AND spent > budget * 0.9 AND status = 'active'
+  `).all() as Array<{ name: string; budget: number; spent: number }>
+  for (const p of overBudgetProjects) {
+    const pct = Math.round((p.spent / p.budget) * 100)
+    insights.push({
+      type: 'budget',
+      title: `Budget Alert: ${p.name}`,
+      message: `${pct}% of budget used. Consider reviewing scope or requesting additional funding.`,
+      severity: pct > 100 ? 'critical' : 'warning',
+    })
+  }
+
+  if (overdueTaskCount > 0) {
+    insights.push({
+      type: 'schedule',
+      title: `${overdueTaskCount} Overdue Tasks`,
+      message: `Review and reassign ${overdueTaskCount} tasks that have passed their due dates.`,
+      severity: overdueTaskCount > 10 ? 'critical' : 'warning',
+    })
+  }
+
+  const highRiskProjects = db.prepare(`
+    SELECT p.name, COUNT(*) as risk_count FROM risks r JOIN projects p ON p.id = r.project_id
+    WHERE r.score >= 6 AND r.status = 'open'
+    GROUP BY p.id HAVING risk_count >= 2
+  `).all() as Array<{ name: string; risk_count: number }>
+  for (const p of highRiskProjects) {
+    insights.push({
+      type: 'risk',
+      title: `High Risk Concentration: ${p.name}`,
+      message: `${p.risk_count} high-severity open risks. Immediate mitigation planning recommended.`,
+      severity: 'critical',
+    })
+  }
+
+  if (onTrack === activeProjects && activeProjects > 0) {
+    insights.push({ type: 'positive', title: 'All Projects On Track', message: 'Excellent! All active projects are currently healthy.', severity: 'info' })
+  }
+
   res.json({
     kpis: {
-      totalProjects,
-      activeProjects,
-      onTrack,
-      atRisk,
-      behind,
-      completed,
+      totalProjects, activeProjects, onTrack, atRisk, behind, completed,
       totalBudget: budgetData.total_budget || 0,
       totalSpent: budgetData.total_spent || 0,
       budgetUtilization: budgetData.total_budget ? Math.round((budgetData.total_spent / budgetData.total_budget) * 100) : 0,
-      openRisks,
-      highRisks,
+      openRisks, highRisks, overdueTaskCount,
+      avgVelocity: Math.round(avgVelocity || 0),
     },
     upcomingMilestones,
     recentActivity,
     portfolioHealth,
     resourceUtilization,
     weeklyHours,
+    healthTrend,
+    insights: insights.slice(0, 5),
   })
 })
 

@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle } from 'lucide-react'
-import { projectsApi, tasksApi, risksApi, budgetApi } from '../api'
+import {
+  ArrowLeft, Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign,
+  AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, MessageCircle,
+  Timer, Zap, Download, Activity
+} from 'lucide-react'
+import { projectsApi, tasksApi, risksApi, budgetApi, exportApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
@@ -10,10 +14,13 @@ import GanttChart from '../components/gantt/GanttChart'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import Avatar from '../components/ui/Avatar'
+import CommentThread from '../components/comments/CommentThread'
+import TimeTracker from '../components/time/TimeTracker'
+import RiskMatrix from '../components/charts/RiskMatrix'
 import { format, parseISO } from 'date-fns'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'time' | 'comments' | 'activity'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -21,8 +28,11 @@ function formatCurrency(n: number): string {
   return `$${n}`
 }
 
-const RISK_MATRIX_LABELS = { low: 1, medium: 2, high: 3 }
-const BUDGET_COLORS: Record<string, string> = { labor: '#3b82f6', materials: '#10b981', infrastructure: '#8b5cf6', software: '#f59e0b', equipment: '#06b6d4', travel: '#ec4899', overhead: '#6366f1', other: '#94a3b8' }
+const BUDGET_COLORS: Record<string, string> = {
+  labor: '#3b82f6', materials: '#10b981', infrastructure: '#8b5cf6',
+  software: '#f59e0b', equipment: '#06b6d4', travel: '#ec4899',
+  overhead: '#6366f1', other: '#94a3b8'
+}
 
 export default function ProjectDetail() {
   const { id, tab } = useParams<{ id: string; tab?: string }>()
@@ -35,6 +45,7 @@ export default function ProjectDetail() {
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [members, setMembers] = useState<Array<{ id: number; name: string; email: string; role: string; allocation_percent: number; department?: string }>>([])
   const [taskStats, setTaskStats] = useState<{ total: number; done: number; in_progress: number; blocked: number; total_estimated: number; total_actual: number } | null>(null)
+  const [activity, setActivity] = useState<Array<{ id: number; user_name: string; action: string; details?: string; created_at: string }>>([])
   const [loading, setLoading] = useState(true)
   const [taskView, setTaskView] = useState<'kanban' | 'list'>('kanban')
   const [showTaskForm, setShowTaskForm] = useState(false)
@@ -44,11 +55,12 @@ export default function ProjectDetail() {
 
   const loadProject = useCallback(async () => {
     if (!id) return
-    const [projRes, tasksRes, risksRes, budgetRes] = await Promise.all([
+    const [projRes, tasksRes, risksRes, budgetRes, activityRes] = await Promise.all([
       projectsApi.get(Number(id)),
       tasksApi.list(Number(id)),
       risksApi.list(Number(id)),
       budgetApi.get(Number(id)),
+      projectsApi.getActivity(Number(id)),
     ])
     setProject(projRes.data.project)
     setTasks(tasksRes.data.tasks)
@@ -57,6 +69,7 @@ export default function ProjectDetail() {
     setMilestones(projRes.data.milestones)
     setMembers(projRes.data.members)
     setTaskStats(projRes.data.taskStats)
+    setActivity(activityRes.data.activity || [])
   }, [id])
 
   useEffect(() => {
@@ -99,18 +112,37 @@ export default function ProjectDetail() {
 
   const TABS = [
     { id: 'overview' as Tab, label: 'Overview', icon: BarChart2 },
-    { id: 'tasks' as Tab, label: 'Tasks', icon: List },
+    { id: 'tasks' as Tab, label: `Tasks (${taskStats?.total || 0})`, icon: List },
     { id: 'gantt' as Tab, label: 'Gantt', icon: GitBranch },
     { id: 'budget' as Tab, label: 'Budget', icon: DollarSign },
     { id: 'risks' as Tab, label: `Risks (${risks.filter(r => r.status !== 'closed').length})`, icon: AlertTriangle },
+    { id: 'time' as Tab, label: 'Time', icon: Timer },
     { id: 'team' as Tab, label: 'Team', icon: Users },
+    { id: 'comments' as Tab, label: 'Comments', icon: MessageCircle },
+    { id: 'activity' as Tab, label: 'Activity', icon: Activity },
   ]
 
   const budgetPct = project.budget > 0 ? Math.round((project.spent / project.budget) * 100) : 0
 
+  function getActivityText(action: string, details?: string): string {
+    try {
+      const d = details ? JSON.parse(details) : {}
+      switch (action) {
+        case 'task_completed': return `Completed task "${d.task || ''}"`
+        case 'health_changed': return `Changed health ${d.from} → ${d.to}`
+        case 'risk_raised': return `Raised risk: ${d.risk || d.title || ''}`
+        case 'comment_added': return d.preview ? `Commented: "${d.preview}"` : 'Added a comment'
+        case 'task_created': return `Created task "${d.name || ''}"`
+        case 'created': return 'Project created'
+        case 'budget_updated': return d.note || 'Updated budget'
+        default: return action.replace(/_/g, ' ')
+      }
+    } catch { return action }
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* Breadcrumb & header */}
+      {/* Breadcrumb */}
       <div>
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
           <Link to="/projects" className="hover:text-gray-700">Projects</Link>
@@ -122,7 +154,7 @@ export default function ProjectDetail() {
             <div className="w-4 h-12 rounded-full" style={{ backgroundColor: project.color }} />
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-              <div className="flex items-center gap-3 mt-1">
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
                 <StatusBadge status={project.status} />
                 <HealthBadge health={project.health} />
                 <PriorityBadge priority={project.priority} />
@@ -153,7 +185,7 @@ export default function ProjectDetail() {
           <div className="text-xs text-gray-500 mb-1">Budget</div>
           <div className="font-bold text-gray-900">{formatCurrency(project.budget)}</div>
           <Progress value={budgetPct} size="sm" color={budgetPct > 90 ? 'red' : 'blue'} className="mt-1" />
-          <div className="text-xs text-gray-400 mt-1">{formatCurrency(project.spent)} spent ({budgetPct}%)</div>
+          <div className="text-xs text-gray-400 mt-1">{formatCurrency(project.spent)} ({budgetPct}%)</div>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-3">
           <div className="text-xs text-gray-500 mb-1">Tasks</div>
@@ -177,14 +209,14 @@ export default function ProjectDetail() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex gap-0.5 overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
             >
-              <t.icon size={14} /> {t.label}
+              <t.icon size={13} /> {t.label}
             </button>
           ))}
         </div>
@@ -200,7 +232,6 @@ export default function ProjectDetail() {
                 <p className="text-sm text-gray-600 leading-relaxed">{project.description}</p>
               </div>
             )}
-            {/* Milestones */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-gray-400" /> Milestones</h3>
               {milestones.length === 0 ? (
@@ -221,9 +252,20 @@ export default function ProjectDetail() {
                 </div>
               )}
             </div>
+            {/* Export actions */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Download size={15} className="text-gray-400" /> Export Data</h3>
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => exportApi.tasks(Number(id))} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                  <Download size={12} /> Tasks CSV
+                </button>
+                <button onClick={() => exportApi.risks(Number(id))} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                  <Download size={12} /> Risks CSV
+                </button>
+              </div>
+            </div>
           </div>
           <div className="col-span-12 lg:col-span-4 space-y-5">
-            {/* Risk summary */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><AlertTriangle size={16} className="text-orange-400" /> Risk Summary</h3>
               <div className="space-y-2">
@@ -238,7 +280,6 @@ export default function ProjectDetail() {
                 ))}
               </div>
             </div>
-            {/* Team */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Users size={16} className="text-gray-400" /> Team</h3>
               <div className="space-y-2">
@@ -362,7 +403,6 @@ export default function ProjectDetail() {
                   <XAxis dataKey="category" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
                   <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  <Legend />
                   <Bar dataKey="planned" name="Planned" fill="#dbeafe" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="actual" name="Actual" radius={[4, 4, 0, 0]}>
                     {budget.byCategory.map((entry, i) => <Cell key={i} fill={BUDGET_COLORS[entry.category] || '#94a3b8'} />)}
@@ -391,7 +431,7 @@ export default function ProjectDetail() {
               </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="font-semibold text-gray-900 mb-3">Line Items</h3>
+              <h3 className="font-semibold text-gray-900 mb-3">By Category</h3>
               <div className="space-y-2">
                 {budget.byCategory.map(cat => (
                   <div key={cat.category}>
@@ -409,41 +449,56 @@ export default function ProjectDetail() {
       )}
 
       {activeTab === 'risks' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">{risks.length} Risks</h3>
+        <div className="space-y-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Risk Matrix</h3>
+            <RiskMatrix risks={risks} />
           </div>
-          <div className="grid grid-cols-1 gap-3">
-            {risks.map(risk => (
-              <div key={risk.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${risk.score >= 6 ? 'bg-red-100 text-red-700' : risk.score >= 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                        Score: {risk.score}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded capitalize ${risk.status === 'open' ? 'bg-orange-100 text-orange-700' : risk.status === 'mitigating' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{risk.status}</span>
-                      <span className="text-xs text-gray-400 capitalize">{risk.category}</span>
-                    </div>
-                    <div className="font-medium text-gray-800">{risk.title}</div>
-                    {risk.description && <div className="text-sm text-gray-500 mt-1">{risk.description}</div>}
-                    {risk.mitigation_plan && (
-                      <div className="text-xs text-blue-600 mt-1 flex items-start gap-1">
-                        <CheckCircle size={12} className="mt-0.5 flex-shrink-0" />
-                        {risk.mitigation_plan}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">{risks.length} Risks</h3>
+              <button onClick={() => exportApi.risks(Number(id))} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                <Download size={12} /> Export CSV
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              {risks.map(risk => (
+                <div key={risk.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${risk.score >= 6 ? 'bg-red-100 text-red-700' : risk.score >= 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          Score: {risk.score}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded capitalize ${risk.status === 'open' ? 'bg-orange-100 text-orange-700' : risk.status === 'mitigating' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{risk.status}</span>
+                        <span className="text-xs text-gray-400 capitalize">{risk.category}</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-xs text-gray-400">P: <span className="capitalize">{risk.probability}</span></div>
-                    <div className="text-xs text-gray-400">I: <span className="capitalize">{risk.impact}</span></div>
-                    {risk.owner_name && <div className="text-xs text-gray-500 mt-1">{risk.owner_name}</div>}
+                      <div className="font-medium text-gray-800">{risk.title}</div>
+                      {risk.description && <div className="text-sm text-gray-500 mt-1">{risk.description}</div>}
+                      {risk.mitigation_plan && (
+                        <div className="text-xs text-blue-600 mt-1 flex items-start gap-1">
+                          <CheckCircle size={12} className="mt-0.5 flex-shrink-0" />
+                          {risk.mitigation_plan}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs text-gray-400">P: <span className="capitalize">{risk.probability}</span></div>
+                      <div className="text-xs text-gray-400">I: <span className="capitalize">{risk.impact}</span></div>
+                      {risk.owner_name && <div className="text-xs text-gray-500 mt-1">{risk.owner_name}</div>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {risks.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">No risks registered</div>}
+              ))}
+              {risks.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">No risks registered</div>}
+            </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'time' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <TimeTracker projectId={Number(id)} tasks={tasks} />
         </div>
       )}
 
@@ -482,6 +537,33 @@ export default function ProjectDetail() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {activeTab === 'comments' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 max-w-2xl">
+          <CommentThread entityType="project" entityId={Number(id)} />
+        </div>
+      )}
+
+      {activeTab === 'activity' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Activity Log</h3>
+          </div>
+          <div className="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
+            {activity.map(a => (
+              <div key={a.id} className="flex items-start gap-3 px-5 py-3">
+                <Avatar name={a.user_name || 'U'} size="xs" className="mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium text-gray-700">{a.user_name}</span>{' '}
+                  <span className="text-xs text-gray-500">{getActivityText(a.action, a.details)}</span>
+                </div>
+                <span className="text-xs text-gray-400 flex-shrink-0">{format(parseISO(a.created_at), 'MMM d, HH:mm')}</span>
+              </div>
+            ))}
+            {activity.length === 0 && <div className="px-5 py-8 text-center text-sm text-gray-400">No activity recorded</div>}
+          </div>
         </div>
       )}
 

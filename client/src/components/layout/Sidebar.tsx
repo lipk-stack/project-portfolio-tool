@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  Activity, Zap
+  Map, Zap, Clock
 } from 'lucide-react'
 import { useUIStore } from '../../store'
 
@@ -10,6 +10,8 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/projects', label: 'Projects', icon: FolderOpen },
+  { to: '/roadmap', label: 'Roadmap', icon: Map },
+  { to: '/sprints', label: 'Sprints', icon: Zap },
   { to: '/resources', label: 'Resources', icon: Users },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
 ]
@@ -35,7 +37,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
         {navItems.map(item => {
           const isActive = item.exact
             ? location.pathname === item.to
@@ -64,7 +66,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom section */}
-      <div className="border-t border-gray-700/50 p-2 space-y-1">
+      <div className="border-t border-gray-700/50 p-2 space-y-0.5">
         <NavLink
           to="/settings"
           title={collapsed ? 'Settings' : undefined}

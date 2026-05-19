@@ -73,6 +73,7 @@ export const resourcesApi = {
   utilization: () => api.get('/resources/utilization'),
   users: () => api.get('/resources/users'),
   getUser: (id: number) => api.get(`/resources/users/${id}`),
+  weeklyCapacity: () => api.get('/resources/weekly-capacity'),
 }
 
 export const risksApi = {
@@ -95,6 +96,53 @@ export const reportsApi = {
   overview: () => api.get('/reports/overview'),
   resourceUtilization: () => api.get('/reports/resource-utilization'),
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
+}
+
+export const commentsApi = {
+  list: (entityType: string, entityId: number) => api.get(`/comments/${entityType}/${entityId}`),
+  create: (entityType: string, entityId: number, content: string) => api.post(`/comments/${entityType}/${entityId}`, { content }),
+  delete: (id: number) => api.delete(`/comments/${id}`),
+}
+
+export const timeApi = {
+  getProject: (projectId: number) => api.get(`/time/project/${projectId}`),
+  getMyTime: () => api.get('/time/user/me'),
+  logForTask: (taskId: number, data: object) => api.post(`/time/task/${taskId}`, data),
+  logForProject: (projectId: number, data: object) => api.post(`/time/project/${projectId}`, data),
+  delete: (id: number) => api.delete(`/time/${id}`),
+}
+
+export const sprintsApi = {
+  list: (projectId: number) => api.get(`/sprints/project/${projectId}`),
+  create: (projectId: number, data: object) => api.post(`/sprints/project/${projectId}`, data),
+  update: (id: number, data: object) => api.put(`/sprints/${id}`, data),
+  delete: (id: number) => api.delete(`/sprints/${id}`),
+  burndown: (id: number) => api.get(`/sprints/${id}/burndown`),
+}
+
+export const notificationsApi = {
+  list: () => api.get('/notifications'),
+  markRead: (id: number) => api.post(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/read-all'),
+}
+
+export const templatesApi = {
+  list: () => api.get('/templates'),
+  create: (data: object) => api.post('/templates', data),
+  createFromProject: (projectId: number, data: object) => api.post(`/templates/from-project/${projectId}`, data),
+  createProject: (templateId: number, data: object) => api.post(`/templates/${templateId}/create-project`, data),
+  delete: (id: number) => api.delete(`/templates/${id}`),
+}
+
+export const searchApi = {
+  search: (q: string) => api.get('/search', { params: { q } }),
+}
+
+export const exportApi = {
+  tasks: (projectId: number) => window.open(`/api/export/project/${projectId}/tasks`, '_blank'),
+  risks: (projectId: number) => window.open(`/api/export/project/${projectId}/risks`, '_blank'),
+  portfolioSummary: () => window.open('/api/export/portfolio/summary', '_blank'),
+  timelog: () => window.open('/api/export/portfolio/timelog', '_blank'),
 }
 
 export default api
