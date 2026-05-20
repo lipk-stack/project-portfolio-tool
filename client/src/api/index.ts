@@ -148,4 +148,14 @@ export const timesheetsApi = {
   delete: (id: number) => api.delete(`/timesheets/${id}`),
 }
 
+export const templatesApi = {
+  list: () => api.get('/templates'),
+  get: (id: number) => api.get(`/templates/${id}`),
+  create: (data: object) => api.post('/templates', data),
+  update: (id: number, data: object) => api.put(`/templates/${id}`, data),
+  delete: (id: number) => api.delete(`/templates/${id}`),
+  apply: (id: number, data: object) => api.post(`/templates/${id}/apply`, data),
+  fromProject: (projectId: number, data: object) => api.post(`/templates/from-project/${projectId}`, data),
+}
+
 export default api

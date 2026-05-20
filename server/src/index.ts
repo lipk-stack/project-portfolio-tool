@@ -21,6 +21,7 @@ import searchRoutes from './routes/search'
 import evmRoutes from './routes/evm'
 import issuesRoutes from './routes/issues'
 import timesheetsRoutes from './routes/timesheets'
+import templatesRoutes from './routes/templates'
 
 initializeDatabase()
 
@@ -57,6 +58,7 @@ app.use('/api/search', searchRoutes)
 app.use('/api/evm', evmRoutes)
 app.use('/api/issues', issuesRoutes)
 app.use('/api/timesheets', timesheetsRoutes)
+app.use('/api/templates', templatesRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

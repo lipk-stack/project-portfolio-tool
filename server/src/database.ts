@@ -250,6 +250,20 @@ export function initializeDatabase() {
       uploaded_by INTEGER REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS project_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      category TEXT DEFAULT 'general',
+      icon TEXT DEFAULT '📋',
+      tasks TEXT NOT NULL DEFAULT '[]',
+      milestones TEXT NOT NULL DEFAULT '[]',
+      duration_days INTEGER DEFAULT 90,
+      created_by INTEGER REFERENCES users(id),
+      is_builtin INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   seedDatabase()
@@ -542,6 +556,131 @@ function seedDatabase() {
     insertActivity.run('project', projects[2], users[7], 'task_completed', JSON.stringify({ task: 'Data Ingestion Pipeline' }))
     insertActivity.run('project', projects[0], users[1], 'budget_updated', JSON.stringify({ note: 'Approved additional $20k for performance optimization' }))
     insertActivity.run('project', projects[3], users[2], 'health_changed', JSON.stringify({ from: 'yellow', to: 'red', reason: 'Budget overrun risk' }))
+  })()
+
+  // Built-in Project Templates
+  const insertTemplate = db.prepare(`INSERT INTO project_templates (name, description, category, icon, tasks, milestones, duration_days, is_builtin) VALUES (?, ?, ?, ?, ?, ?, ?, 1)`)
+  db.transaction(() => {
+    insertTemplate.run(
+      'Software Development', 'Standard software development lifecycle template', 'technology', '💻',
+      JSON.stringify([
+        { name: 'Requirements Gathering', status: 'todo', priority: 'high', estimated_hours: 16, wbs_code: '1.0' },
+        { name: 'System Architecture Design', status: 'todo', priority: 'high', estimated_hours: 24, wbs_code: '2.0' },
+        { name: 'Database Design', status: 'todo', priority: 'medium', estimated_hours: 16, wbs_code: '2.1' },
+        { name: 'API Design & Documentation', status: 'todo', priority: 'medium', estimated_hours: 20, wbs_code: '2.2' },
+        { name: 'Frontend Development', status: 'todo', priority: 'high', estimated_hours: 80, wbs_code: '3.0' },
+        { name: 'Backend Development', status: 'todo', priority: 'high', estimated_hours: 80, wbs_code: '3.1' },
+        { name: 'Unit Testing', status: 'todo', priority: 'medium', estimated_hours: 40, wbs_code: '4.0' },
+        { name: 'Integration Testing', status: 'todo', priority: 'medium', estimated_hours: 32, wbs_code: '4.1' },
+        { name: 'User Acceptance Testing', status: 'todo', priority: 'high', estimated_hours: 24, wbs_code: '4.2' },
+        { name: 'Deployment & Go-Live', status: 'todo', priority: 'critical', estimated_hours: 16, wbs_code: '5.0' },
+        { name: 'Post-Launch Support', status: 'todo', priority: 'medium', estimated_hours: 40, wbs_code: '6.0' },
+      ]),
+      JSON.stringify([
+        { name: 'Requirements Sign-off', offset_days: 14 },
+        { name: 'Architecture Approved', offset_days: 28 },
+        { name: 'Development Complete', offset_days: 60 },
+        { name: 'UAT Complete', offset_days: 75 },
+        { name: 'Go-Live', offset_days: 90 },
+      ]),
+      90
+    )
+    insertTemplate.run(
+      'Marketing Campaign', 'End-to-end marketing campaign launch template', 'marketing', '📢',
+      JSON.stringify([
+        { name: 'Campaign Strategy & Brief', status: 'todo', priority: 'high', estimated_hours: 12, wbs_code: '1.0' },
+        { name: 'Market Research & Analysis', status: 'todo', priority: 'high', estimated_hours: 20, wbs_code: '1.1' },
+        { name: 'Target Audience Definition', status: 'todo', priority: 'medium', estimated_hours: 8, wbs_code: '1.2' },
+        { name: 'Creative Brief & Concept', status: 'todo', priority: 'high', estimated_hours: 16, wbs_code: '2.0' },
+        { name: 'Content Creation', status: 'todo', priority: 'high', estimated_hours: 40, wbs_code: '3.0' },
+        { name: 'Visual Design Assets', status: 'todo', priority: 'medium', estimated_hours: 32, wbs_code: '3.1' },
+        { name: 'Social Media Setup', status: 'todo', priority: 'medium', estimated_hours: 8, wbs_code: '4.0' },
+        { name: 'Email Campaign Setup', status: 'todo', priority: 'medium', estimated_hours: 12, wbs_code: '4.1' },
+        { name: 'Paid Advertising Setup', status: 'todo', priority: 'high', estimated_hours: 16, wbs_code: '4.2' },
+        { name: 'Campaign Launch', status: 'todo', priority: 'critical', estimated_hours: 4, wbs_code: '5.0' },
+        { name: 'Performance Monitoring', status: 'todo', priority: 'medium', estimated_hours: 20, wbs_code: '6.0' },
+        { name: 'Campaign Report & Analysis', status: 'todo', priority: 'medium', estimated_hours: 12, wbs_code: '7.0' },
+      ]),
+      JSON.stringify([
+        { name: 'Strategy Approved', offset_days: 7 },
+        { name: 'Creative Assets Ready', offset_days: 21 },
+        { name: 'Channels Activated', offset_days: 28 },
+        { name: 'Campaign Launch', offset_days: 30 },
+        { name: 'Final Report', offset_days: 60 },
+      ]),
+      60
+    )
+    insertTemplate.run(
+      'Product Launch', 'New product go-to-market launch template', 'product', '🚀',
+      JSON.stringify([
+        { name: 'Product Vision & Roadmap', status: 'todo', priority: 'high', estimated_hours: 16, wbs_code: '1.0' },
+        { name: 'Market & Competitor Analysis', status: 'todo', priority: 'high', estimated_hours: 24, wbs_code: '1.1' },
+        { name: 'MVP Feature Definition', status: 'todo', priority: 'critical', estimated_hours: 20, wbs_code: '2.0' },
+        { name: 'UX Research & Prototyping', status: 'todo', priority: 'high', estimated_hours: 40, wbs_code: '2.1' },
+        { name: 'Product Development', status: 'todo', priority: 'critical', estimated_hours: 120, wbs_code: '3.0' },
+        { name: 'Beta Testing Program', status: 'todo', priority: 'high', estimated_hours: 32, wbs_code: '4.0' },
+        { name: 'Go-to-Market Strategy', status: 'todo', priority: 'high', estimated_hours: 20, wbs_code: '5.0' },
+        { name: 'Pricing & Packaging', status: 'todo', priority: 'medium', estimated_hours: 16, wbs_code: '5.1' },
+        { name: 'Sales Enablement', status: 'todo', priority: 'medium', estimated_hours: 24, wbs_code: '5.2' },
+        { name: 'Marketing Launch Campaign', status: 'todo', priority: 'high', estimated_hours: 40, wbs_code: '6.0' },
+        { name: 'Launch Day Execution', status: 'todo', priority: 'critical', estimated_hours: 8, wbs_code: '7.0' },
+        { name: 'Post-Launch Review', status: 'todo', priority: 'medium', estimated_hours: 16, wbs_code: '8.0' },
+      ]),
+      JSON.stringify([
+        { name: 'MVP Defined', offset_days: 14 },
+        { name: 'Beta Launch', offset_days: 60 },
+        { name: 'GTM Strategy Ready', offset_days: 75 },
+        { name: 'Product Launch', offset_days: 90 },
+        { name: '30-day Review', offset_days: 120 },
+      ]),
+      120
+    )
+    insertTemplate.run(
+      'Data Analytics Project', 'Analytics and business intelligence implementation', 'data', '📊',
+      JSON.stringify([
+        { name: 'Business Requirements Gathering', status: 'todo', priority: 'high', estimated_hours: 20, wbs_code: '1.0' },
+        { name: 'Data Audit & Assessment', status: 'todo', priority: 'high', estimated_hours: 24, wbs_code: '1.1' },
+        { name: 'Data Architecture Design', status: 'todo', priority: 'high', estimated_hours: 32, wbs_code: '2.0' },
+        { name: 'ETL Pipeline Development', status: 'todo', priority: 'high', estimated_hours: 60, wbs_code: '3.0' },
+        { name: 'Data Warehouse Setup', status: 'todo', priority: 'high', estimated_hours: 40, wbs_code: '3.1' },
+        { name: 'Data Quality Rules', status: 'todo', priority: 'medium', estimated_hours: 24, wbs_code: '3.2' },
+        { name: 'Dashboard Development', status: 'todo', priority: 'high', estimated_hours: 48, wbs_code: '4.0' },
+        { name: 'Report Creation', status: 'todo', priority: 'medium', estimated_hours: 32, wbs_code: '4.1' },
+        { name: 'User Training', status: 'todo', priority: 'medium', estimated_hours: 20, wbs_code: '5.0' },
+        { name: 'Go-Live & Handover', status: 'todo', priority: 'critical', estimated_hours: 16, wbs_code: '6.0' },
+      ]),
+      JSON.stringify([
+        { name: 'Architecture Approved', offset_days: 21 },
+        { name: 'ETL Complete', offset_days: 45 },
+        { name: 'Dashboards Ready', offset_days: 60 },
+        { name: 'Training Complete', offset_days: 70 },
+        { name: 'Go-Live', offset_days: 75 },
+      ]),
+      75
+    )
+    insertTemplate.run(
+      'Office Move / Relocation', 'Office relocation project plan template', 'operations', '🏢',
+      JSON.stringify([
+        { name: 'Relocation Planning & Timeline', status: 'todo', priority: 'high', estimated_hours: 16, wbs_code: '1.0' },
+        { name: 'New Space Assessment', status: 'todo', priority: 'high', estimated_hours: 8, wbs_code: '1.1' },
+        { name: 'Vendor Selection (Moving Company)', status: 'todo', priority: 'medium', estimated_hours: 12, wbs_code: '2.0' },
+        { name: 'IT Infrastructure Planning', status: 'todo', priority: 'critical', estimated_hours: 24, wbs_code: '2.1' },
+        { name: 'Space Design & Layout', status: 'todo', priority: 'medium', estimated_hours: 20, wbs_code: '3.0' },
+        { name: 'Furniture & Equipment Ordering', status: 'todo', priority: 'medium', estimated_hours: 12, wbs_code: '3.1' },
+        { name: 'Staff Communication Plan', status: 'todo', priority: 'high', estimated_hours: 8, wbs_code: '4.0' },
+        { name: 'IT Setup at New Location', status: 'todo', priority: 'critical', estimated_hours: 32, wbs_code: '5.0' },
+        { name: 'Physical Move Execution', status: 'todo', priority: 'critical', estimated_hours: 24, wbs_code: '6.0' },
+        { name: 'Post-Move Setup & Testing', status: 'todo', priority: 'high', estimated_hours: 16, wbs_code: '7.0' },
+      ]),
+      JSON.stringify([
+        { name: 'Vendor Contracts Signed', offset_days: 14 },
+        { name: 'Space Ready', offset_days: 35 },
+        { name: 'IT Infrastructure Live', offset_days: 42 },
+        { name: 'Move Complete', offset_days: 45 },
+        { name: 'Operations Normal', offset_days: 50 },
+      ]),
+      50
+    )
   })()
 
   console.log('Database seeded successfully with demo data')

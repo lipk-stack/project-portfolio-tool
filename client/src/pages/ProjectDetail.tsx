@@ -5,7 +5,7 @@ import {
   AlertTriangle, GitBranch, List, Kanban, Edit, CheckCircle, Activity,
   FileText, Bug, ExternalLink, TrendingUp, TrendingDown, Minus, XCircle
 } from 'lucide-react'
-import { projectsApi, tasksApi, risksApi, budgetApi, issuesApi, changeRequestsApi, evmApi, sprintsApi, resourcesApi } from '../api'
+import { projectsApi, tasksApi, risksApi, budgetApi, issuesApi, changeRequestsApi, evmApi, sprintsApi, resourcesApi, templatesApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus, Issue, ChangeRequest, EVMData, Sprint } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
@@ -295,7 +295,20 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              const templateName = prompt('Template name:', `${project.name} Template`)
+              if (!templateName) return
+              try {
+                await templatesApi.fromProject(project.id, { name: templateName, category: 'custom' })
+                toast.success('Project saved as template!')
+              } catch { toast.error('Failed to save template') }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Save as Template
+          </button>
           <div className="text-right">
             <div className="text-2xl font-bold text-gray-900">{project.completion_percent}%</div>
             <div className="text-xs text-gray-400">Complete</div>
