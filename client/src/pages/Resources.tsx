@@ -4,7 +4,7 @@ import { ResourceSummary } from '../types'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
 import Avatar from '../components/ui/Avatar'
-import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon, Calendar, Activity, BarChart2 } from 'lucide-react'
+import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon, Calendar, Activity, BarChart2, CalendarDays } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts'
 import { format, addWeeks, startOfWeek, subWeeks, parseISO } from 'date-fns'
 
@@ -15,6 +15,15 @@ interface UtilizationRow {
   capacity: number
   week: string
   logged_hours: number
+}
+
+interface CalendarAssignment {
+  user_id: number
+  date: string
+  project_id: number
+  project_name: string
+  project_color: string
+  hours: number
 }
 
 interface ForecastUser {
@@ -35,9 +44,15 @@ export default function Resources() {
   } | null>(null)
   const [utilization, setUtilization] = useState<UtilizationRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'heatmap' | 'forecast'>('overview')
+  const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'heatmap' | 'forecast' | 'calendar'>('overview')
   const [forecast, setForecast] = useState<{ users: ForecastUser[]; weekBuckets: string[] } | null>(null)
   const [forecastLoading, setForecastLoading] = useState(false)
+  const [calendarData, setCalendarData] = useState<{ users: Array<{ id: number; name: string; department: string; capacity: number }>; assignments: CalendarAssignment[] } | null>(null)
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
 
   useEffect(() => {
     Promise.all([
@@ -57,6 +72,13 @@ export default function Resources() {
       resourcesApi.forecast(8).then(r => setForecast({ users: r.data.forecast, weekBuckets: r.data.weekBuckets })).finally(() => setForecastLoading(false))
     }
   }, [activeView])
+
+  useEffect(() => {
+    if (activeView === 'calendar') {
+      setCalendarLoading(true)
+      resourcesApi.calendar(calendarMonth).then(r => setCalendarData(r.data)).finally(() => setCalendarLoading(false))
+    }
+  }, [activeView, calendarMonth])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -141,6 +163,7 @@ export default function Resources() {
             { key: 'matrix', icon: Users, label: 'Matrix' },
             { key: 'heatmap', icon: Calendar, label: 'Heatmap' },
             { key: 'forecast', icon: BarChart2, label: 'Forecast' },
+            { key: 'calendar', icon: CalendarDays, label: 'Calendar' },
           ] as const).map(v => (
             <button
               key={v.key}
@@ -423,6 +446,144 @@ export default function Resources() {
               </table>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Calendar view */}
+      {activeView === 'calendar' && (
+        <Card padding="none">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900">Resource Booking Calendar</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Monthly view of resource assignments by day</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 text-xs mr-4">
+                {[
+                  { color: '#22c55e', label: 'Light (<6h)' },
+                  { color: '#eab308', label: 'Moderate (6–8h)' },
+                  { color: '#ef4444', label: 'Overloaded (>8h)' },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                    <span className="text-gray-500">{label}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const [y, m] = calendarMonth.split('-').map(Number)
+                  const prev = new Date(y, m - 2, 1)
+                  setCalendarMonth(`${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`)
+                }}
+                className="px-2 py-1 text-sm rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                &#8249;
+              </button>
+              <span className="text-sm font-semibold text-gray-700 min-w-[110px] text-center">
+                {new Date(calendarMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => {
+                  const [y, m] = calendarMonth.split('-').map(Number)
+                  const next = new Date(y, m, 1)
+                  setCalendarMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`)
+                }}
+                className="px-2 py-1 text-sm rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                &#8250;
+              </button>
+            </div>
+          </div>
+
+          {calendarLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : calendarData && (() => {
+            const [calYear, calMon] = calendarMonth.split('-').map(Number)
+            const daysInMonth = new Date(calYear, calMon, 0).getDate()
+            const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+            // Build lookup: user_id -> date -> assignments[]
+            const lookup: Record<number, Record<string, CalendarAssignment[]>> = {}
+            for (const a of calendarData.assignments) {
+              if (!lookup[a.user_id]) lookup[a.user_id] = {}
+              const d = a.date.slice(8, 10).replace(/^0/, '')
+              if (!lookup[a.user_id][d]) lookup[a.user_id][d] = []
+              lookup[a.user_id][d].push(a)
+            }
+
+            return (
+              <div className="overflow-auto p-4">
+                <table className="w-full border-separate" style={{ borderSpacing: '2px' }}>
+                  <thead>
+                    <tr>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-2 py-1 w-44 sticky left-0 bg-white z-10">
+                        Team Member
+                      </th>
+                      {days.map(d => {
+                        const dayDate = new Date(calYear, calMon - 1, d)
+                        const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6
+                        const isToday = dayDate.toDateString() === new Date().toDateString()
+                        return (
+                          <th
+                            key={d}
+                            className={`text-center text-xs font-medium px-0.5 py-1 min-w-[28px] ${isWeekend ? 'text-gray-300' : 'text-gray-500'} ${isToday ? 'text-blue-600 font-bold' : ''}`}
+                          >
+                            {d}
+                          </th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calendarData.users.map(user => (
+                      <tr key={user.id}>
+                        <td className="py-1 sticky left-0 bg-white z-10">
+                          <div className="flex items-center gap-2">
+                            <Avatar name={user.name} size="xs" />
+                            <div>
+                              <div className="text-xs font-medium text-gray-700 truncate max-w-[110px]">{user.name}</div>
+                              <div className="text-xs text-gray-400">{user.department}</div>
+                            </div>
+                          </div>
+                        </td>
+                        {days.map(d => {
+                          const dayDate = new Date(calYear, calMon - 1, d)
+                          const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6
+                          const dayAssignments = lookup[user.id]?.[String(d)] || []
+                          const totalHours = dayAssignments.reduce((s, a) => s + a.hours, 0)
+                          const dotColor = totalHours === 0 ? null : totalHours > 8 ? '#ef4444' : totalHours >= 6 ? '#eab308' : '#22c55e'
+                          const tooltipText = dayAssignments.map(a => `${a.project_name}: ${a.hours}h`).join('\n')
+
+                          return (
+                            <td
+                              key={d}
+                              className={`text-center py-0.5 ${isWeekend ? 'bg-gray-50' : ''}`}
+                              title={tooltipText || undefined}
+                            >
+                              <div className="flex items-center justify-center h-7">
+                                {dotColor ? (
+                                  <div
+                                    className="w-4 h-4 rounded-full transition-transform hover:scale-125 cursor-default"
+                                    style={{ backgroundColor: dayAssignments.length === 1 ? dayAssignments[0].project_color : dotColor }}
+                                    title={tooltipText}
+                                  />
+                                ) : (
+                                  <span className="text-gray-100 text-xs">·</span>
+                                )}
+                              </div>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
         </Card>
       )}
 

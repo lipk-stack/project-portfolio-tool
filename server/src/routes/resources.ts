@@ -161,6 +161,28 @@ router.get('/forecast', authenticate, (req: Request, res: Response) => {
   res.json({ forecast: result, weekBuckets })
 })
 
+router.get('/calendar', authenticate, (req: Request, res: Response) => {
+  const month = (req.query.month as string) || new Date().toISOString().slice(0, 7)
+  const [year, mon] = month.split('-').map(Number)
+  const start = `${month}-01`
+  const lastDay = new Date(year, mon, 0).getDate()
+  const end = `${month}-${String(lastDay).padStart(2, '0')}`
+
+  const users = db.prepare("SELECT id, name, department, capacity FROM users ORDER BY name").all()
+
+  const assignments = db.prepare(`
+    SELECT te.user_id, te.date, te.project_id, p.name as project_name, p.color as project_color,
+           SUM(te.hours) as hours
+    FROM time_entries te
+    JOIN projects p ON p.id = te.project_id
+    WHERE te.date >= ? AND te.date <= ?
+    GROUP BY te.user_id, te.date, te.project_id
+    ORDER BY te.date, te.user_id
+  `).all(start, end)
+
+  res.json({ users, assignments })
+})
+
 router.get('/users/:id', authenticate, (req: Request, res: Response) => {
   const user = db.prepare('SELECT id, name, email, role, department, capacity, hourly_rate FROM users WHERE id = ?').get(req.params.id)
   if (!user) return res.status(404).json({ error: 'User not found' })

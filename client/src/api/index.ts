@@ -94,6 +94,7 @@ export const resourcesApi = {
   forecast: (weeks?: number) => api.get('/resources/forecast', { params: { weeks } }),
   users: () => api.get('/resources/users'),
   getUser: (id: number) => api.get(`/resources/users/${id}`),
+  calendar: (month: string) => api.get('/resources/calendar', { params: { month } }),
 }
 
 export const risksApi = {
