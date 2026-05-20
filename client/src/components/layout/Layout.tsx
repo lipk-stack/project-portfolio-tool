@@ -2,6 +2,8 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import { useUIStore } from '../../store'
+import CommandPalette from '../ui/CommandPalette'
+import ToastContainer from '../ui/Toast'
 
 export default function Layout() {
   const collapsed = useUIStore(s => s.sidebarCollapsed)
@@ -15,6 +17,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <CommandPalette />
+      <ToastContainer />
     </div>
   )
 }

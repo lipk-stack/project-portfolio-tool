@@ -162,4 +162,42 @@ router.get('/:id/activity', authenticate, (req: Request, res: Response) => {
   res.json({ activity })
 })
 
+router.get('/:id/documents', authenticate, (req: Request, res: Response) => {
+  const docs = db.prepare(`
+    SELECT d.*, u.name as uploaded_by_name
+    FROM project_documents d LEFT JOIN users u ON d.uploaded_by = u.id
+    WHERE d.project_id = ? ORDER BY d.created_at DESC
+  `).all(req.params.id)
+  res.json({ documents: docs })
+})
+
+router.post('/:id/documents', authenticate, (req: Request, res: Response) => {
+  const { name, url, description, doc_type } = req.body
+  const result = db.prepare(`
+    INSERT INTO project_documents (project_id, name, url, description, doc_type, uploaded_by)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(req.params.id, name, url, description, doc_type || 'link', req.user!.userId)
+  const doc = db.prepare(`
+    SELECT d.*, u.name as uploaded_by_name FROM project_documents d LEFT JOIN users u ON d.uploaded_by = u.id WHERE d.id = ?
+  `).get(result.lastInsertRowid)
+  res.status(201).json({ document: doc })
+})
+
+router.delete('/:id/documents/:docId', authenticate, (req: Request, res: Response) => {
+  db.prepare('DELETE FROM project_documents WHERE id = ? AND project_id = ?').run(req.params.docId, req.params.id)
+  res.json({ ok: true })
+})
+
+router.get('/:id/time-entries', authenticate, (req: Request, res: Response) => {
+  const entries = db.prepare(`
+    SELECT te.*, u.name as user_name, t.name as task_name
+    FROM time_entries te
+    LEFT JOIN users u ON te.user_id = u.id
+    LEFT JOIN tasks t ON te.task_id = t.id
+    WHERE te.project_id = ?
+    ORDER BY te.date DESC LIMIT 100
+  `).all(req.params.id)
+  res.json({ entries })
+})
+
 export default router

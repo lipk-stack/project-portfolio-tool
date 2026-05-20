@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { useAuthStore } from '../store'
+import { useAuthStore, useUIStore } from '../store'
 import Card from '../components/ui/Card'
-import { User, Shield, Bell, Palette, Database, Key } from 'lucide-react'
+import { User, Bell, Database, Key, Moon, Sun, Monitor, Command, Keyboard } from 'lucide-react'
 import Avatar from '../components/ui/Avatar'
 
 export default function Settings() {
   const user = useAuthStore(s => s.user)
+  const theme = useUIStore(s => s.theme)
+  const setTheme = useUIStore(s => s.setTheme)
   const [saved, setSaved] = useState(false)
 
   const handleSave = () => {
@@ -118,16 +120,69 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* Appearance */}
+      <Card>
+        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+          <Monitor size={18} className="text-blue-600" />
+          <h2 className="font-semibold text-gray-900">Appearance</h2>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <div className="text-sm font-medium text-gray-700 mb-3">Theme</div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { value: 'light', label: 'Light', icon: <Sun size={18} /> },
+                { value: 'dark', label: 'Dark', icon: <Moon size={18} /> },
+              ].map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => setTheme(t.value as 'light' | 'dark')}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors ${theme === t.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}
+                >
+                  {t.icon}
+                  <span className="text-sm font-medium">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Keyboard Shortcuts */}
+      <Card>
+        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+          <Keyboard size={18} className="text-blue-600" />
+          <h2 className="font-semibold text-gray-900">Keyboard Shortcuts</h2>
+        </div>
+        <div className="space-y-3">
+          {[
+            { keys: ['⌘', 'K'], label: 'Open command palette / search' },
+            { keys: ['Esc'], label: 'Close modal / palette' },
+            { keys: ['↑', '↓'], label: 'Navigate search results' },
+            { keys: ['⏎'], label: 'Select search result' },
+          ].map(s => (
+            <div key={s.label} className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">{s.label}</span>
+              <div className="flex items-center gap-1">
+                {s.keys.map(k => <kbd key={k} className="px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs font-mono">{k}</kbd>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* About */}
       <Card>
         <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
           <Database size={18} className="text-blue-600" />
-          <h2 className="font-semibold text-gray-900">About</h2>
+          <h2 className="font-semibold text-gray-900">About ProjectPulse</h2>
         </div>
         <div className="space-y-2 text-sm text-gray-600">
-          <div className="flex justify-between"><span className="text-gray-400">Version</span><span className="font-medium">1.0.0</span></div>
-          <div className="flex justify-between"><span className="text-gray-400">Database</span><span className="font-medium">SQLite (local)</span></div>
-          <div className="flex justify-between"><span className="text-gray-400">Build</span><span className="font-medium">React 18 + Node.js 22</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Version</span><span className="font-medium">2.0.0</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Database</span><span className="font-medium">SQLite (WAL mode)</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Frontend</span><span className="font-medium">React 18 + TypeScript + Vite</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Backend</span><span className="font-medium">Express + Node.js</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Features</span><span className="font-medium">EVM · Gantt · Kanban · Sprints · CRM</span></div>
         </div>
       </Card>
     </div>

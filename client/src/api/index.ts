@@ -55,6 +55,10 @@ export const projectsApi = {
   updateMilestone: (id: number, mid: number, data: object) => api.put(`/projects/${id}/milestones/${mid}`, data),
   deleteMilestone: (id: number, mid: number) => api.delete(`/projects/${id}/milestones/${mid}`),
   getActivity: (id: number) => api.get(`/projects/${id}/activity`),
+  getDocuments: (id: number) => api.get(`/projects/${id}/documents`),
+  createDocument: (id: number, data: object) => api.post(`/projects/${id}/documents`, data),
+  deleteDocument: (id: number, docId: number) => api.delete(`/projects/${id}/documents/${docId}`),
+  getTimeEntries: (id: number) => api.get(`/projects/${id}/time-entries`),
 }
 
 export const tasksApi = {
@@ -95,6 +99,45 @@ export const reportsApi = {
   overview: () => api.get('/reports/overview'),
   resourceUtilization: () => api.get('/reports/resource-utilization'),
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
+}
+
+export const sprintsApi = {
+  list: (projectId: number) => api.get(`/sprints/project/${projectId}`),
+  create: (projectId: number, data: object) => api.post(`/sprints/project/${projectId}`, data),
+  update: (id: number, data: object) => api.put(`/sprints/${id}`, data),
+  delete: (id: number) => api.delete(`/sprints/${id}`),
+  burndown: (id: number) => api.get(`/sprints/${id}/burndown`),
+}
+
+export const changeRequestsApi = {
+  list: (projectId: number) => api.get(`/change-requests/project/${projectId}`),
+  create: (projectId: number, data: object) => api.post(`/change-requests/project/${projectId}`, data),
+  update: (id: number, data: object) => api.put(`/change-requests/${id}`, data),
+  delete: (id: number) => api.delete(`/change-requests/${id}`),
+}
+
+export const notificationsApi = {
+  list: () => api.get('/notifications'),
+  markRead: (id: number) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
+  delete: (id: number) => api.delete(`/notifications/${id}`),
+  generate: () => api.post('/notifications/generate'),
+}
+
+export const searchApi = {
+  search: (q: string) => api.get('/search', { params: { q } }),
+}
+
+export const evmApi = {
+  project: (id: number) => api.get(`/evm/project/${id}`),
+  portfolio: () => api.get('/evm/portfolio'),
+}
+
+export const issuesApi = {
+  list: (projectId: number) => api.get(`/issues/project/${projectId}`),
+  create: (projectId: number, data: object) => api.post(`/issues/project/${projectId}`, data),
+  update: (id: number, data: object) => api.put(`/issues/${id}`, data),
+  delete: (id: number) => api.delete(`/issues/${id}`),
 }
 
 export default api

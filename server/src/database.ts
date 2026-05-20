@@ -172,6 +172,84 @@ export function initializeDatabase() {
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS sprints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      goal TEXT,
+      start_date DATE,
+      end_date DATE,
+      status TEXT DEFAULT 'planning',
+      capacity INTEGER DEFAULT 0,
+      velocity INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS change_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      type TEXT DEFAULT 'scope',
+      status TEXT DEFAULT 'pending',
+      priority TEXT DEFAULT 'medium',
+      impact_schedule INTEGER DEFAULT 0,
+      impact_budget REAL DEFAULT 0,
+      impact_scope TEXT,
+      requested_by INTEGER REFERENCES users(id),
+      approved_by INTEGER REFERENCES users(id),
+      requested_date DATE DEFAULT CURRENT_DATE,
+      decision_date DATE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      entity_type TEXT,
+      entity_id INTEGER,
+      read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS issues (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      type TEXT DEFAULT 'general',
+      severity TEXT DEFAULT 'medium',
+      status TEXT DEFAULT 'open',
+      assignee_id INTEGER REFERENCES users(id),
+      reported_by INTEGER REFERENCES users(id),
+      due_date DATE,
+      resolved_date DATE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS project_baselines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      baseline_data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS project_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      task_id INTEGER REFERENCES tasks(id),
+      name TEXT NOT NULL,
+      url TEXT,
+      description TEXT,
+      doc_type TEXT DEFAULT 'link',
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   seedDatabase()
@@ -395,6 +473,64 @@ function seedDatabase() {
     [tasks[12], users[7], projects[1], 8, '2026-05-15', 'Data mapping documentation'],
   ]
   db.transaction(() => { for (const t of timeEntries) insertTime.run(...t as Parameters<typeof insertTime.run>) })()
+
+  // Sprints
+  const insertSprint = db.prepare(`INSERT INTO sprints (project_id, name, goal, start_date, end_date, status, capacity, velocity) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+  const sprints = db.transaction(() => {
+    const ids: number[] = []
+    const data = [
+      [projects[0], 'Sprint 1', 'Complete discovery and initial design', '2026-01-15', '2026-01-29', 'completed', 80, 47],
+      [projects[0], 'Sprint 2', 'Finalize UI/UX and start frontend dev', '2026-01-29', '2026-02-12', 'completed', 80, 55],
+      [projects[0], 'Sprint 3', 'Core frontend components and auth flow', '2026-02-12', '2026-02-26', 'completed', 80, 42],
+      [projects[0], 'Sprint 4', 'Dashboard views and API integration', '2026-02-26', '2026-03-12', 'active', 80, 38],
+      [projects[0], 'Sprint 5', 'QA and launch preparation', '2026-03-12', '2026-03-26', 'planning', 80, 0],
+      [projects[3], 'Sprint 1', 'AI feature design and backend API', '2025-11-01', '2025-11-15', 'completed', 60, 34],
+      [projects[3], 'Sprint 2', 'iOS and Android foundation', '2025-11-15', '2025-11-29', 'completed', 60, 55],
+      [projects[3], 'Sprint 3', 'Core features implementation', '2025-11-29', '2025-12-13', 'completed', 60, 60],
+      [projects[3], 'Sprint 4', 'Beta testing and bug fixes', '2025-12-13', '2025-12-27', 'active', 60, 44],
+    ]
+    for (const d of data) {
+      const result = insertSprint.run(...d as Parameters<typeof insertSprint.run>)
+      ids.push(result.lastInsertRowid as number)
+    }
+    return ids
+  })()
+
+  // Change Requests
+  const insertCR = db.prepare(`INSERT INTO change_requests (project_id, title, description, type, status, priority, impact_schedule, impact_budget, impact_scope, requested_by, approved_by, requested_date, decision_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  db.transaction(() => {
+    insertCR.run(projects[0], 'Add payment history export feature', 'Stakeholder requested CSV export of payment history for finance team', 'scope', 'approved', 'medium', 5, 8000, 'New export module, CSV generation', users[1], users[0], '2026-02-15', '2026-02-22')
+    insertCR.run(projects[0], 'Integrate with CRM system', 'Marketing wants bidirectional CRM sync for customer data', 'scope', 'pending', 'high', 14, 25000, 'New CRM integration module, API connectors', users[1], null, '2026-03-01', null)
+    insertCR.run(projects[1], 'Extend project timeline by 2 months', 'Data quality issues causing delays in migration planning phase', 'schedule', 'approved', 'critical', 60, 180000, null, users[9], users[0], '2026-03-10', '2026-03-15')
+    insertCR.run(projects[1], 'Add custom reporting module', 'Finance team needs custom SAP reports beyond standard ones', 'scope', 'rejected', 'medium', 21, 45000, 'Custom report builder module', users[7], users[0], '2026-02-20', '2026-02-28')
+    insertCR.run(projects[3], 'Add Apple Watch companion app', 'Product team wants WatchOS companion', 'scope', 'pending', 'low', 30, 60000, 'New WatchOS target and UI', users[2], null, '2026-04-01', null)
+    insertCR.run(projects[3], 'Increase backend infrastructure capacity', 'Load testing showed need for 3x current capacity', 'budget', 'approved', 'high', 0, 12000, null, users[5], users[2], '2026-03-20', '2026-03-25')
+  })()
+
+  // Issues
+  const insertIssue = db.prepare(`INSERT INTO issues (project_id, title, description, type, severity, status, assignee_id, reported_by, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  db.transaction(() => {
+    insertIssue.run(projects[0], 'SSO integration broken in staging', 'Single sign-on fails with SAML assertion error in staging environment', 'bug', 'high', 'open', users[3], users[6], '2026-05-20')
+    insertIssue.run(projects[0], 'Performance degradation on dashboard load', 'Dashboard takes 8+ seconds to load with 1000+ records', 'performance', 'medium', 'in_progress', users[3], users[4], '2026-05-25')
+    insertIssue.run(projects[1], 'Data mapping inconsistency in module 3', 'GL account codes not mapping correctly from legacy to SAP', 'data', 'critical', 'open', users[7], users[9], '2026-05-18')
+    insertIssue.run(projects[1], 'Training materials outdated', 'Training docs reflect old system screens, need update', 'documentation', 'low', 'open', users[3], users[7], '2026-06-01')
+    insertIssue.run(projects[3], 'iOS crash on older devices', 'App crashes on iPhone X and earlier when accessing camera', 'bug', 'critical', 'in_progress', users[5], users[6], '2026-05-22')
+    insertIssue.run(projects[3], 'Push notifications not delivering on Android 12', 'FCM notifications not received on Android 12 devices', 'bug', 'high', 'open', users[5], users[6], '2026-05-25')
+    insertIssue.run(projects[2], 'Cloud cost 40% over budget for data processing', 'Spark jobs consuming more compute than estimated', 'budget', 'high', 'in_progress', users[7], users[7], '2026-05-30')
+  })()
+
+  // Notifications
+  const insertNotif = db.prepare(`INSERT INTO notifications (user_id, type, title, message, entity_type, entity_id, read) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+  db.transaction(() => {
+    insertNotif.run(users[0], 'risk_alert', 'High risk identified: SAP consultant availability', 'Project ERP Migration has a critical risk with no mitigation plan', 'project', projects[1], 0)
+    insertNotif.run(users[0], 'budget_alert', 'Mobile App v3.0 budget at 93%', 'Project has spent $298K of $320K budget at 78% completion', 'project', projects[3], 0)
+    insertNotif.run(users[0], 'milestone_due', 'Milestone due in 3 days: App Store Launch', 'App Store Submission milestone is approaching for Mobile App v3.0', 'project', projects[3], 0)
+    insertNotif.run(users[1], 'task_assigned', 'You have been assigned a task', 'Deployment & Launch task is assigned to you in Customer Portal Redesign', 'task', tasks[5], 0)
+    insertNotif.run(users[1], 'cr_pending', 'Change Request pending your review', 'CRM Integration CR needs your decision in Customer Portal Redesign', 'project', projects[0], 0)
+    insertNotif.run(users[3], 'issue_assigned', 'Issue assigned to you: SSO integration broken', 'High severity bug in Customer Portal Redesign needs your attention', 'project', projects[0], 0)
+    insertNotif.run(users[3], 'task_overdue', 'Task overdue: Dashboard Views', 'Dashboard Views task is past its due date', 'task', tasks[7], 1)
+    insertNotif.run(users[5], 'issue_assigned', 'Critical iOS crash assigned to you', 'Investigate and fix iOS crash on older devices immediately', 'project', projects[3], 0)
+  })()
 
   // Activity log
   const insertActivity = db.prepare(`INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)`)

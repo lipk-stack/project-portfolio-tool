@@ -192,3 +192,106 @@ export interface ProjectMember {
   role: string
   allocation_percent: number
 }
+
+export interface Sprint {
+  id: number
+  project_id: number
+  name: string
+  goal?: string
+  start_date?: string
+  end_date?: string
+  status: 'planning' | 'active' | 'completed'
+  capacity: number
+  velocity: number
+  task_count?: number
+  done_count?: number
+  total_points?: number
+  completed_points?: number
+  created_at: string
+}
+
+export interface ChangeRequest {
+  id: number
+  project_id: number
+  title: string
+  description?: string
+  type: 'scope' | 'schedule' | 'budget' | 'resource' | 'other'
+  status: 'pending' | 'approved' | 'rejected' | 'deferred'
+  priority: Priority
+  impact_schedule: number
+  impact_budget: number
+  impact_scope?: string
+  requested_by?: number
+  requested_by_name?: string
+  approved_by?: number
+  approved_by_name?: string
+  requested_date: string
+  decision_date?: string
+  created_at: string
+}
+
+export interface Notification {
+  id: number
+  user_id: number
+  type: string
+  title: string
+  message?: string
+  entity_type?: string
+  entity_id?: number
+  read: number
+  created_at: string
+}
+
+export interface Issue {
+  id: number
+  project_id: number
+  title: string
+  description?: string
+  type: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  status: 'open' | 'in_progress' | 'resolved' | 'closed'
+  assignee_id?: number
+  assignee_name?: string
+  reporter_name?: string
+  reported_by?: number
+  due_date?: string
+  resolved_date?: string
+  created_at: string
+}
+
+export interface ProjectDocument {
+  id: number
+  project_id: number
+  task_id?: number
+  name: string
+  url?: string
+  description?: string
+  doc_type: string
+  uploaded_by?: number
+  uploaded_by_name?: string
+  created_at: string
+}
+
+export interface EVMData {
+  bac: number
+  pv: number
+  ev: number
+  acwp: number
+  sv: number
+  cv: number
+  spi: number
+  cpi: number
+  eac: number
+  etc: number
+  vac: number
+  tcpi: number
+  completion_percent: number
+}
+
+export interface SearchResult {
+  type: 'project' | 'task' | 'risk' | 'user'
+  id: number
+  name: string
+  subtitle?: string
+  color?: string
+}

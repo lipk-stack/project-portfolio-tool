@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuthStore } from './store'
+import { useAuthStore, useUIStore } from './store'
+import { useEffect } from 'react'
 import Layout from './components/layout/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -9,6 +10,8 @@ import ProjectDetail from './pages/ProjectDetail'
 import Resources from './pages/Resources'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import Sprints from './pages/Sprints'
+import ChangeRequests from './pages/ChangeRequests'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -16,9 +19,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function ThemeInitializer() {
+  const theme = useUIStore(s => s.theme)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <ThemeInitializer />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
@@ -27,8 +39,10 @@ export default function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/:tab" element={<ProjectDetail />} />
+          <Route path="sprints" element={<Sprints />} />
           <Route path="resources" element={<Resources />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="change-requests" element={<ChangeRequests />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

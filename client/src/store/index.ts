@@ -29,10 +29,56 @@ export const useAuthStore = create<AuthState>(set => ({
 
 interface UIState {
   sidebarCollapsed: boolean
+  theme: 'light' | 'dark'
+  commandPaletteOpen: boolean
   toggleSidebar: () => void
+  setTheme: (theme: 'light' | 'dark') => void
+  toggleCommandPalette: () => void
 }
 
 export const useUIStore = create<UIState>(set => ({
   sidebarCollapsed: false,
+  theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'light',
+  commandPaletteOpen: false,
   toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setTheme: (theme) => {
+    localStorage.setItem('theme', theme)
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    set({ theme })
+  },
+  toggleCommandPalette: () => set(s => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+}))
+
+interface NotificationState {
+  unreadCount: number
+  setUnreadCount: (count: number) => void
+}
+
+export const useNotificationStore = create<NotificationState>(set => ({
+  unreadCount: 0,
+  setUnreadCount: (count) => set({ unreadCount: count }),
+}))
+
+// Toast system
+type ToastType = 'success' | 'error' | 'warning' | 'info'
+interface Toast {
+  id: string
+  type: ToastType
+  message: string
+}
+
+interface ToastState {
+  toasts: Toast[]
+  addToast: (message: string, type?: ToastType) => void
+  removeToast: (id: string) => void
+}
+
+export const useToastStore = create<ToastState>(set => ({
+  toasts: [],
+  addToast: (message, type = 'info') => {
+    const id = Math.random().toString(36).slice(2)
+    set(s => ({ toasts: [...s.toasts, { id, type, message }] }))
+    setTimeout(() => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })), 4000)
+  },
+  removeToast: (id) => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
 }))
