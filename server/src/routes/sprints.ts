@@ -85,4 +85,25 @@ router.get('/:id/burndown', authenticate, (req: Request, res: Response) => {
   res.json({ sprint, burndown, totalPoints, completedPoints })
 })
 
+// Velocity chart: past sprint velocities
+router.get('/project/:projectId/velocity', authenticate, (req: Request, res: Response) => {
+  const sprints = db.prepare(`
+    SELECT s.id, s.name, s.start_date, s.end_date, s.status,
+      COALESCE(SUM(t.story_points), 0) as total_points,
+      COALESCE(SUM(CASE WHEN t.status = 'done' THEN t.story_points ELSE 0 END), 0) as completed_points,
+      s.capacity
+    FROM sprints s
+    LEFT JOIN tasks t ON t.sprint = s.name AND t.project_id = s.project_id AND t.story_points > 0
+    WHERE s.project_id = ? AND s.status IN ('completed', 'active')
+    GROUP BY s.id
+    ORDER BY s.start_date ASC LIMIT 12
+  `).all(req.params.projectId) as Array<{ id: number; name: string; start_date: string; total_points: number; completed_points: number; capacity: number; status: string }>
+
+  const avgVelocity = sprints.filter(s => s.status === 'completed').length > 0
+    ? Math.round(sprints.filter(s => s.status === 'completed').reduce((a, s) => a + s.completed_points, 0) / sprints.filter(s => s.status === 'completed').length)
+    : 0
+
+  res.json({ sprints, avgVelocity })
+})
+
 export default router

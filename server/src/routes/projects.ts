@@ -200,6 +200,45 @@ router.get('/:id/time-entries', authenticate, (req: Request, res: Response) => {
   res.json({ entries })
 })
 
+// Auto-score project health and update the health field
+router.post('/:id/auto-health', authenticate, (req: Request, res: Response) => {
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as any
+  if (!project) return res.status(404).json({ error: 'Not found' })
+
+  // Compute EVM-like indicators
+  const today = new Date()
+  const start = project.start_date ? new Date(project.start_date) : null
+  const end = project.end_date ? new Date(project.end_date) : null
+  const bac = project.budget || 0
+  const spent = project.spent || 0
+  const pct = (project.completion_percent || 0) / 100
+
+  let spi = 1, cpi = 1
+  if (start && end && bac > 0) {
+    const totalMs = end.getTime() - start.getTime()
+    const elapsed = Math.max(0, Math.min(today.getTime() - start.getTime(), totalMs))
+    const pv = totalMs > 0 ? bac * (elapsed / totalMs) : 0
+    const ev = bac * pct
+    spi = pv > 0 ? ev / pv : 1
+    cpi = spent > 0 ? ev / spent : 1
+  }
+
+  const openRisks = (db.prepare("SELECT COUNT(*) as c FROM risks WHERE project_id = ? AND status != 'closed' AND score >= 6").get(req.params.id) as { c: number }).c
+  const overdueTaskCount = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE project_id = ? AND status NOT IN ('done','cancelled') AND end_date < date('now')").get(req.params.id) as { c: number }).c
+
+  // Scoring: SPI (0-30) + CPI (0-30) + overdue (-10 each, -30 max) + high risks (-10 each, -20 max)
+  let score = 0
+  score += Math.min(30, Math.max(0, spi * 30))
+  score += Math.min(30, Math.max(0, cpi * 30))
+  score -= Math.min(30, overdueTaskCount * 10)
+  score -= Math.min(20, openRisks * 10)
+
+  const health = score >= 45 ? 'green' : score >= 25 ? 'yellow' : 'red'
+  db.prepare("UPDATE projects SET health = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(health, req.params.id)
+
+  res.json({ health, score: Math.round(score), spi: Math.round(spi * 100) / 100, cpi: Math.round(cpi * 100) / 100, overdueTaskCount, openRisks })
+})
+
 // CPM: compute critical path and update is_critical flags
 router.post('/:id/compute-cpm', authenticate, (req: Request, res: Response) => {
   const projectId = req.params.id

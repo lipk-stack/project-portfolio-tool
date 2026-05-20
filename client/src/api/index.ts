@@ -67,6 +67,7 @@ export const projectsApi = {
   deleteBaseline: (id: number, bid: number) => api.delete(`/projects/${id}/baselines/${bid}`),
   computeCPM: (id: number) => api.post(`/projects/${id}/compute-cpm`, {}),
   getSCurve: (id: number) => api.get(`/projects/${id}/s-curve`),
+  autoHealth: (id: number) => api.post(`/projects/${id}/auto-health`, {}),
 }
 
 export const commentsApi = {
@@ -123,6 +124,7 @@ export const sprintsApi = {
   update: (id: number, data: object) => api.put(`/sprints/${id}`, data),
   delete: (id: number) => api.delete(`/sprints/${id}`),
   burndown: (id: number) => api.get(`/sprints/${id}/burndown`),
+  velocity: (projectId: number) => api.get(`/sprints/project/${projectId}/velocity`),
 }
 
 export const changeRequestsApi = {

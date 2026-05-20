@@ -391,6 +391,18 @@ export default function ProjectDetail() {
         <div className="flex items-center gap-3">
           <button
             onClick={async () => {
+              try {
+                const r = await projectsApi.autoHealth(project.id)
+                setProject(prev => prev ? { ...prev, health: r.data.health } : prev)
+                toast.success(`Health auto-scored: ${r.data.health.toUpperCase()} (score: ${r.data.score}/60)`)
+              } catch { toast.error('Failed to compute health') }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <CheckCircle size={13} /> Auto-Score Health
+          </button>
+          <button
+            onClick={async () => {
               const templateName = prompt('Template name:', `${project.name} Template`)
               if (!templateName) return
               try {

@@ -7,7 +7,38 @@ import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
 import { format, parseISO, differenceInDays } from 'date-fns'
 import { useToast } from '../components/ui/Toast'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, ReferenceLine } from 'recharts'
+
+function VelocityChart({ projectId }: { projectId: number }) {
+  const [data, setData] = useState<{ sprints: any[]; avgVelocity: number } | null>(null)
+  useEffect(() => {
+    sprintsApi.velocity(projectId).then(r => setData(r.data)).catch(() => {})
+  }, [projectId])
+  if (!data || data.sprints.length < 2) return null
+  return (
+    <Card className="mt-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <TrendingUp size={14} className="text-purple-500" /> Velocity Trend
+        </h3>
+        {data.avgVelocity > 0 && (
+          <span className="text-xs text-gray-500">Avg: <span className="font-semibold text-purple-600">{data.avgVelocity} pts</span></span>
+        )}
+      </div>
+      <ResponsiveContainer width="100%" height={120}>
+        <BarChart data={data.sprints} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+          <YAxis tick={{ fontSize: 9 }} />
+          <Tooltip formatter={(v: number, n: string) => [v, n === 'total_points' ? 'Committed' : 'Completed']} />
+          <Bar dataKey="total_points" fill="#e2e8f0" name="Committed" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="completed_points" fill="#8b5cf6" name="Completed" radius={[3, 3, 0, 0]} />
+          {data.avgVelocity > 0 && <ReferenceLine y={data.avgVelocity} stroke="#8b5cf6" strokeDasharray="4 2" label={{ value: 'Avg', position: 'right', fontSize: 9, fill: '#8b5cf6' }} />}
+        </BarChart>
+      </ResponsiveContainer>
+    </Card>
+  )
+}
 
 const STATUS_COLORS = {
   planning: 'bg-gray-100 text-gray-700',
@@ -266,6 +297,7 @@ export default function Sprints() {
                 />
               ))}
             </div>
+            <VelocityChart projectId={project.id} />
           </div>
         )
       })}
