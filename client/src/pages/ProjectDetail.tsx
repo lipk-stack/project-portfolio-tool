@@ -12,6 +12,7 @@ import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
 import GanttChart, { BaselineTask } from '../components/gantt/GanttChart'
 import TaskComments from '../components/ui/TaskComments'
+import NetworkDiagram from '../components/network/NetworkDiagram'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import RiskForm from '../components/forms/RiskForm'
@@ -21,7 +22,7 @@ import { format, parseISO, isPast, differenceInDays } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadialBarChart, RadialBar } from 'recharts'
 import { useToast } from '../components/ui/Toast'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'issues' | 'changes' | 'sprints' | 'team' | 'docs'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'network' | 'budget' | 'risks' | 'issues' | 'changes' | 'sprints' | 'team' | 'docs'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -158,6 +159,8 @@ export default function ProjectDetail() {
   const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string; email: string; department?: string }>>([])
   const [addMemberForm, setAddMemberForm] = useState({ user_id: '', role: 'member', allocation_percent: 100 })
   const [docForm, setDocForm] = useState({ name: '', url: '', description: '', doc_type: 'link' })
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState('')
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -331,6 +334,7 @@ export default function ProjectDetail() {
     { id: 'overview', label: 'Overview', icon: BarChart2 },
     { id: 'tasks', label: 'Tasks', icon: List },
     { id: 'gantt', label: 'Gantt', icon: GitBranch },
+    { id: 'network', label: 'Network', icon: Activity },
     { id: 'sprints', label: 'Sprints', icon: GitBranch, badge: sprints.filter(s => s.status === 'active').length },
     { id: 'budget', label: 'Budget', icon: DollarSign },
     { id: 'risks', label: 'Risks', icon: AlertTriangle, badge: risks.filter(r => r.status !== 'closed').length },
@@ -604,9 +608,40 @@ export default function ProjectDetail() {
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {selectedTaskIds.size > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border-b border-blue-200">
+                  <span className="text-sm font-medium text-blue-800">{selectedTaskIds.size} selected</span>
+                  <select
+                    value={bulkStatus}
+                    onChange={e => setBulkStatus(e.target.value)}
+                    className="text-sm border border-blue-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Set status…</option>
+                    {['todo', 'in_progress', 'review', 'done', 'blocked'].map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                  </select>
+                  <button
+                    onClick={async () => {
+                      if (!bulkStatus) return
+                      await Promise.all([...selectedTaskIds].map(tid => tasksApi.update(tid, { status: bulkStatus })))
+                      setTasks(prev => prev.map(t => selectedTaskIds.has(t.id) ? { ...t, status: bulkStatus as TaskStatus } : t))
+                      setSelectedTaskIds(new Set()); setBulkStatus('')
+                      toast.success(`Updated ${selectedTaskIds.size} tasks`)
+                    }}
+                    disabled={!bulkStatus}
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >Apply</button>
+                  <button onClick={() => setSelectedTaskIds(new Set())} className="ml-auto text-xs text-blue-600 hover:text-blue-800">Clear</button>
+                </div>
+              )}
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b">
+                    <th className="px-4 py-3 w-8">
+                      <input type="checkbox"
+                        checked={selectedTaskIds.size === tasks.filter(t => !t.parent_id).length && tasks.filter(t => !t.parent_id).length > 0}
+                        onChange={e => setSelectedTaskIds(e.target.checked ? new Set(tasks.filter(t => !t.parent_id).map(t => t.id)) : new Set())}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                    </th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Task</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Status</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Assignee</th>
@@ -617,7 +652,17 @@ export default function ProjectDetail() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {tasks.filter(t => !t.parent_id).map(task => (
-                    <tr key={task.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}>
+                    <tr key={task.id} className={`hover:bg-gray-50 cursor-pointer ${selectedTaskIds.has(task.id) ? 'bg-blue-50' : ''}`} onClick={() => { setEditTask(task); setShowTaskForm(true) }}>
+                      <td className="px-4 py-3 w-8" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox"
+                          checked={selectedTaskIds.has(task.id)}
+                          onChange={e => {
+                            const next = new Set(selectedTaskIds)
+                            e.target.checked ? next.add(task.id) : next.delete(task.id)
+                            setSelectedTaskIds(next)
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           {task.is_critical === 1 && <span className="w-1.5 h-4 rounded bg-red-400 flex-shrink-0" />}
@@ -670,6 +715,16 @@ export default function ProjectDetail() {
           onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
           onSaved={toast.success}
         />
+      )}
+
+      {/* ── NETWORK DIAGRAM ── */}
+      {activeTab === 'network' && (
+        <div className="h-[calc(100vh-300px)] min-h-[500px]">
+          <NetworkDiagram
+            tasks={tasks}
+            onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
+          />
+        </div>
       )}
 
       {/* ── SPRINTS ── */}
