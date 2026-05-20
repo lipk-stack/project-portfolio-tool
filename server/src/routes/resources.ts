@@ -75,6 +75,92 @@ router.get('/users', authenticate, (_req: Request, res: Response) => {
   res.json({ users })
 })
 
+router.get('/forecast', authenticate, (req: Request, res: Response) => {
+  const weeks = parseInt(req.query.weeks as string) || 8
+
+  // Get all future tasks with assignees and dates
+  const futureTasks = db.prepare(`
+    SELECT t.id, t.assignee_id, t.name, t.start_date, t.end_date,
+      t.estimated_hours, t.actual_hours, t.completion_percent, t.status,
+      p.name as project_name, p.color as project_color
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.assignee_id IS NOT NULL
+      AND t.status NOT IN ('done')
+      AND t.end_date >= date('now')
+      AND t.end_date <= date('now', '+${weeks} weeks')
+    ORDER BY t.assignee_id, t.start_date
+  `.replace('${weeks}', String(weeks))).all() as Array<{
+    id: number; assignee_id: number; name: string; start_date?: string; end_date?: string
+    estimated_hours: number; actual_hours: number; completion_percent: number; status: string
+    project_name: string; project_color: string
+  }>
+
+  const users = db.prepare('SELECT id, name, department, capacity FROM users WHERE role != \'admin\' ORDER BY name').all() as Array<{ id: number; name: string; department: string; capacity: number }>
+
+  // Build week buckets
+  const now = new Date()
+  const weekBuckets: string[] = []
+  for (let i = 0; i < weeks; i++) {
+    const d = new Date(now)
+    d.setDate(d.getDate() + i * 7 - d.getDay() + 1) // Monday
+    weekBuckets.push(d.toISOString().split('T')[0])
+  }
+
+  // Calculate projected hours per user per week
+  function getWeekMonday(dateStr: string): string {
+    const d = new Date(dateStr)
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    d.setDate(diff)
+    return d.toISOString().split('T')[0]
+  }
+
+  const forecast: Record<number, Record<string, number>> = {}
+  for (const user of users) forecast[user.id] = {}
+
+  for (const task of futureTasks) {
+    if (!task.start_date || !task.end_date) continue
+    const start = new Date(Math.max(new Date(task.start_date).getTime(), now.getTime()))
+    const end = new Date(task.end_date)
+    if (start >= end) continue
+
+    const remainingHours = task.estimated_hours * (1 - task.completion_percent / 100)
+    if (remainingHours <= 0) continue
+
+    // Distribute hours across weeks
+    const totalMs = end.getTime() - start.getTime()
+    let cur = new Date(start)
+    while (cur <= end) {
+      const weekStart = getWeekMonday(cur.toISOString().split('T')[0])
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      const overlapStart = Math.max(cur.getTime(), start.getTime())
+      const overlapEnd = Math.min(weekEnd.getTime(), end.getTime())
+      const weekMs = Math.max(0, overlapEnd - overlapStart)
+      const weekHours = (weekMs / totalMs) * remainingHours
+
+      if (weekHours > 0 && weekBuckets.includes(weekStart)) {
+        if (!forecast[task.assignee_id]) forecast[task.assignee_id] = {}
+        forecast[task.assignee_id][weekStart] = (forecast[task.assignee_id][weekStart] || 0) + weekHours
+      }
+
+      cur.setDate(cur.getDate() + 7)
+    }
+  }
+
+  const result = users.map(u => ({
+    ...u,
+    weeks: weekBuckets.map(w => ({
+      week: w,
+      projected_hours: Math.round((forecast[u.id]?.[w] || 0) * 10) / 10,
+    })),
+    tasks: futureTasks.filter(t => t.assignee_id === u.id),
+  }))
+
+  res.json({ forecast: result, weekBuckets })
+})
+
 router.get('/users/:id', authenticate, (req: Request, res: Response) => {
   const user = db.prepare('SELECT id, name, email, role, department, capacity, hourly_rate FROM users WHERE id = ?').get(req.params.id)
   if (!user) return res.status(404).json({ error: 'User not found' })

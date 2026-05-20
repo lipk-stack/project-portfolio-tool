@@ -4,9 +4,9 @@ import { ResourceSummary } from '../types'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
 import Avatar from '../components/ui/Avatar'
-import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon, Calendar, Activity } from 'lucide-react'
+import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon, Calendar, Activity, BarChart2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts'
-import { format, addWeeks, startOfWeek, subWeeks } from 'date-fns'
+import { format, addWeeks, startOfWeek, subWeeks, parseISO } from 'date-fns'
 
 interface UtilizationRow {
   id: number
@@ -15,6 +15,15 @@ interface UtilizationRow {
   capacity: number
   week: string
   logged_hours: number
+}
+
+interface ForecastUser {
+  id: number
+  name: string
+  department: string
+  capacity: number
+  weeks: Array<{ week: string; projected_hours: number }>
+  tasks: Array<{ name: string; project_name: string; project_color: string; end_date?: string; estimated_hours: number }>
 }
 
 export default function Resources() {
@@ -26,7 +35,9 @@ export default function Resources() {
   } | null>(null)
   const [utilization, setUtilization] = useState<UtilizationRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'heatmap'>('overview')
+  const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'heatmap' | 'forecast'>('overview')
+  const [forecast, setForecast] = useState<{ users: ForecastUser[]; weekBuckets: string[] } | null>(null)
+  const [forecastLoading, setForecastLoading] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -39,6 +50,13 @@ export default function Resources() {
       setUtilization(uRes.data.utilization)
     }).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (activeView === 'forecast' && !forecast) {
+      setForecastLoading(true)
+      resourcesApi.forecast(8).then(r => setForecast({ users: r.data.forecast, weekBuckets: r.data.weekBuckets })).finally(() => setForecastLoading(false))
+    }
+  }, [activeView])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -122,6 +140,7 @@ export default function Resources() {
             { key: 'overview', icon: Activity, label: 'Overview' },
             { key: 'matrix', icon: Users, label: 'Matrix' },
             { key: 'heatmap', icon: Calendar, label: 'Heatmap' },
+            { key: 'forecast', icon: BarChart2, label: 'Forecast' },
           ] as const).map(v => (
             <button
               key={v.key}
@@ -305,6 +324,105 @@ export default function Resources() {
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+
+      {/* Forecast view */}
+      {activeView === 'forecast' && (
+        <Card padding="none">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900">Workload Forecast</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Projected hours per week based on assigned tasks (next 8 weeks)</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              {[
+                { color: '#f1f5f9', label: 'No load' },
+                { color: '#dbeafe', label: 'Low' },
+                { color: '#86efac', label: 'Optimal' },
+                { color: '#22c55e', label: 'Full' },
+                { color: '#f97316', label: 'High' },
+                { color: '#ef4444', label: 'Over' },
+              ].map(({ color, label }) => (
+                <div key={label} className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: color, border: '1px solid #e2e8f0' }} />
+                  <span className="text-gray-500">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {forecastLoading ? (
+            <div className="flex justify-center py-12"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
+          ) : forecast && (
+            <div className="overflow-auto p-4">
+              <table className="w-full border-separate" style={{ borderSpacing: '3px' }}>
+                <thead>
+                  <tr>
+                    <th className="text-left text-xs font-semibold text-gray-500 px-2 py-1 w-44">Team Member</th>
+                    {forecast.weekBuckets.map((w, i) => (
+                      <th key={i} className="text-center text-xs font-medium text-gray-500 px-1 py-1 min-w-[80px]">
+                        {format(parseISO(w), 'MMM d')}
+                      </th>
+                    ))}
+                    <th className="text-center text-xs font-semibold text-gray-500 px-2 py-1">Upcoming Tasks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecast.users.map(user => {
+                    const weeklyCapacity = (user.capacity || 40) / 52 * 5
+                    const totalForecast = user.weeks.reduce((s, w) => s + w.projected_hours, 0)
+                    return (
+                      <tr key={user.id}>
+                        <td className="py-1">
+                          <div className="flex items-center gap-2">
+                            <Avatar name={user.name} size="xs" />
+                            <div>
+                              <div className="text-xs font-medium text-gray-700 truncate max-w-[110px]">{user.name}</div>
+                              <div className="text-xs text-gray-400">{user.department}</div>
+                            </div>
+                          </div>
+                        </td>
+                        {user.weeks.map((wk, wi) => {
+                          const pct = weeklyCapacity > 0 ? (wk.projected_hours / weeklyCapacity) * 100 : 0
+                          const bg = pct === 0 ? '#f1f5f9' : pct > 120 ? '#ef4444' : pct > 100 ? '#f97316' : pct > 80 ? '#22c55e' : pct > 50 ? '#86efac' : '#dbeafe'
+                          return (
+                            <td key={wi} className="text-center">
+                              <div
+                                className="w-full h-10 rounded flex flex-col items-center justify-center text-xs font-medium transition-transform hover:scale-105"
+                                style={{ backgroundColor: bg, border: '1px solid #e2e8f0' }}
+                                title={`${user.name} · ${format(parseISO(wk.week), 'MMM d')} · ${wk.projected_hours.toFixed(1)}h projected`}
+                              >
+                                {wk.projected_hours > 0 ? (
+                                  <>
+                                    <span style={{ color: '#374151' }}>{wk.projected_hours.toFixed(1)}h</span>
+                                    <span className="text-gray-500" style={{ fontSize: 9 }}>{Math.round(pct)}%</span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </div>
+                            </td>
+                          )
+                        })}
+                        <td className="px-2 py-1">
+                          <div className="flex flex-col gap-0.5 max-h-12 overflow-hidden">
+                            {user.tasks.slice(0, 3).map((t, ti) => (
+                              <div key={ti} className="flex items-center gap-1 text-xs">
+                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.project_color }} />
+                                <span className="truncate text-gray-600 max-w-[120px]">{t.name}</span>
+                              </div>
+                            ))}
+                            {user.tasks.length > 3 && <span className="text-xs text-gray-400">+{user.tasks.length - 3} more</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 

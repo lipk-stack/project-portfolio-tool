@@ -75,6 +75,7 @@ export const resourcesApi = {
   list: () => api.get('/resources'),
   allocationMatrix: () => api.get('/resources/allocation-matrix'),
   utilization: () => api.get('/resources/utilization'),
+  forecast: (weeks?: number) => api.get('/resources/forecast', { params: { weeks } }),
   users: () => api.get('/resources/users'),
   getUser: (id: number) => api.get(`/resources/users/${id}`),
 }
