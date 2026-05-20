@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   TrendingUp, TrendingDown, Minus, FolderOpen, CheckCircle, AlertTriangle,
-  DollarSign, Users, Shield, Calendar, Activity, Clock, ArrowRight, LucideIcon
+  DollarSign, Users, Shield, Calendar, Activity, Clock, ArrowRight, LucideIcon,
+  CalendarClock, CheckSquare, XCircle
 } from 'lucide-react'
 import { dashboardApi, evmApi } from '../api'
 import { DashboardSummary, Milestone, ActivityItem } from '../types'
 import Card from '../components/ui/Card'
-import { HealthDot } from '../components/ui/Badge'
+import { HealthDot, PriorityBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Avatar from '../components/ui/Avatar'
-import { format, parseISO, formatDistanceToNow } from 'date-fns'
+import { format, parseISO, formatDistanceToNow, differenceInDays } from 'date-fns'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, PieChart, Pie
@@ -67,7 +68,7 @@ interface EVMProject {
 }
 
 export default function Dashboard() {
-  const [data, setData] = useState<DashboardSummary | null>(null)
+  const [data, setData] = useState<DashboardSummary & { overdueTasks?: any[]; tasksDueThisWeek?: number; completedThisMonth?: number } | null>(null)
   const [evmData, setEvmData] = useState<{ projects: EVMProject[]; totals: any } | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -115,11 +116,13 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
         <KPICard title="Active Projects" value={kpis.activeProjects} subtitle={`${kpis.totalProjects} total portfolio`} icon={FolderOpen} color="bg-blue-500" trend="neutral" />
         <KPICard title="On Track" value={kpis.onTrack} subtitle={`${kpis.atRisk} at risk · ${kpis.behind} behind`} icon={CheckCircle} color="bg-green-500" trend="up" />
         <KPICard title="Budget Used" value={`${kpis.budgetUtilization}%`} subtitle={`${formatCurrency(kpis.totalSpent)} of ${formatCurrency(kpis.totalBudget)}`} icon={DollarSign} color={kpis.budgetUtilization > 90 ? 'bg-red-500' : 'bg-purple-500'} />
         <KPICard title="Open Risks" value={kpis.openRisks} subtitle={`${kpis.highRisks} high severity`} icon={Shield} color={kpis.highRisks > 3 ? 'bg-red-500' : 'bg-orange-500'} trend={kpis.highRisks > 3 ? 'down' : 'neutral'} />
+        <KPICard title="Overdue Tasks" value={data?.overdueTasks?.length ?? 0} subtitle={`${data?.tasksDueThisWeek ?? 0} due this week`} icon={CalendarClock} color={(data?.overdueTasks?.length ?? 0) > 0 ? 'bg-red-500' : 'bg-gray-400'} trend={(data?.overdueTasks?.length ?? 0) > 0 ? 'down' : 'neutral'} />
+        <KPICard title="Done This Month" value={data?.completedThisMonth ?? 0} subtitle="tasks completed" icon={CheckSquare} color="bg-teal-500" trend="up" />
       </div>
 
       {/* EVM Portfolio Metrics */}
@@ -322,6 +325,41 @@ export default function Dashboard() {
             </div>
           </Card>
         </div>
+
+        {/* Overdue tasks */}
+        {data?.overdueTasks && data.overdueTasks.length > 0 && (
+          <div className="col-span-12">
+            <Card padding="none">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-red-100 bg-red-50">
+                <h2 className="font-semibold text-red-800 flex items-center gap-2">
+                  <XCircle size={16} className="text-red-500" />
+                  Overdue Tasks ({data.overdueTasks.length})
+                </h2>
+                <span className="text-xs text-red-500 font-medium">Requires attention</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {data.overdueTasks.map((task: any) => (
+                  <div key={task.id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => navigate(`/projects/${task.project_id}/tasks`)}>
+                    <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800 truncate">{task.name}</div>
+                      <div className="text-xs text-gray-400 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: task.project_color }} />
+                        {task.project_name}
+                        {task.assignee_name && <span>· {task.assignee_name}</span>}
+                      </div>
+                    </div>
+                    <PriorityBadge priority={task.priority} />
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs font-semibold text-red-600">{Math.abs(differenceInDays(parseISO(task.end_date), new Date()))}d overdue</div>
+                      <div className="text-xs text-gray-400">{format(parseISO(task.end_date), 'MMM d')}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Weekly hours chart */}
         {weeklyHours && weeklyHours.length > 0 && (

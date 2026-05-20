@@ -27,6 +27,8 @@ export const authApi = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }),
   register: (data: { email: string; password: string; name: string; department?: string }) => api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
+  updateProfile: (data: object) => api.put('/auth/profile', data),
+  updatePassword: (data: object) => api.put('/auth/password', data),
 }
 
 export const dashboardApi = {
@@ -59,6 +61,17 @@ export const projectsApi = {
   createDocument: (id: number, data: object) => api.post(`/projects/${id}/documents`, data),
   deleteDocument: (id: number, docId: number) => api.delete(`/projects/${id}/documents/${docId}`),
   getTimeEntries: (id: number) => api.get(`/projects/${id}/time-entries`),
+  getBaselines: (id: number) => api.get(`/projects/${id}/baselines`),
+  saveBaseline: (id: number, data: object) => api.post(`/projects/${id}/baselines`, data),
+  getBaseline: (id: number, bid: number) => api.get(`/projects/${id}/baselines/${bid}`),
+  deleteBaseline: (id: number, bid: number) => api.delete(`/projects/${id}/baselines/${bid}`),
+}
+
+export const commentsApi = {
+  listForTask: (taskId: number) => api.get(`/comments/task/${taskId}`),
+  createForTask: (taskId: number, content: string) => api.post(`/comments/task/${taskId}`, { content }),
+  delete: (id: number) => api.delete(`/comments/${id}`),
+  listForProject: (projectId: number) => api.get(`/comments/project/${projectId}`),
 }
 
 export const tasksApi = {

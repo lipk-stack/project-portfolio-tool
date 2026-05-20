@@ -67,6 +67,31 @@ router.get('/summary', authenticate, (_req: Request, res: Response) => {
     ORDER BY date ASC
   `).all()
 
+  const overdueTasks = db.prepare(`
+    SELECT t.id, t.name, t.priority, t.end_date, t.assignee_id,
+           u.name as assignee_name, p.id as project_id, p.name as project_name, p.color as project_color
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    LEFT JOIN users u ON u.id = t.assignee_id
+    WHERE t.status NOT IN ('done', 'cancelled')
+      AND t.end_date < date('now')
+      AND p.status = 'active'
+    ORDER BY t.end_date ASC LIMIT 10
+  `).all()
+
+  const tasksDueThisWeek = db.prepare(`
+    SELECT COUNT(*) as c FROM tasks
+    WHERE status NOT IN ('done', 'cancelled')
+      AND end_date >= date('now')
+      AND end_date <= date('now', '+7 days')
+  `).get() as { c: number }
+
+  const completedThisMonth = db.prepare(`
+    SELECT COUNT(*) as c FROM tasks
+    WHERE status = 'done'
+      AND updated_at >= date('now', 'start of month')
+  `).get() as { c: number }
+
   res.json({
     kpis: {
       totalProjects,
@@ -86,6 +111,9 @@ router.get('/summary', authenticate, (_req: Request, res: Response) => {
     portfolioHealth,
     resourceUtilization,
     weeklyHours,
+    overdueTasks,
+    tasksDueThisWeek: tasksDueThisWeek.c,
+    completedThisMonth: completedThisMonth.c,
   })
 })
 

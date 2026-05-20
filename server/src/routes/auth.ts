@@ -43,4 +43,27 @@ router.get('/me', authenticate, (req: Request, res: Response) => {
   res.json({ user })
 })
 
+router.put('/profile', authenticate, (req: Request, res: Response) => {
+  const { name, department, capacity, hourly_rate } = req.body
+  if (!name?.trim()) return res.status(400).json({ error: 'Name required' })
+  db.prepare('UPDATE users SET name=?, department=?, capacity=?, hourly_rate=? WHERE id=?').run(
+    name.trim(), department || null, capacity || 40, hourly_rate || 0, req.user!.userId
+  )
+  const user = db.prepare('SELECT id, email, name, role, department, capacity, hourly_rate, created_at FROM users WHERE id = ?').get(req.user!.userId)
+  res.json({ user })
+})
+
+router.put('/password', authenticate, (req: Request, res: Response) => {
+  const { current_password, new_password } = req.body
+  if (!current_password || !new_password) return res.status(400).json({ error: 'Both passwords required' })
+  if (new_password.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' })
+
+  const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user!.userId) as { password_hash: string } | undefined
+  if (!user || !bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: 'Current password incorrect' })
+  }
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(bcrypt.hashSync(new_password, 10), req.user!.userId)
+  res.json({ ok: true })
+})
+
 export default router

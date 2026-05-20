@@ -1,9 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { format, addDays, addWeeks, addMonths, differenceInDays, startOfWeek, startOfMonth, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isToday, isSameMonth, parseISO } from 'date-fns'
-import { ChevronDown, ChevronRight, ZoomIn, ZoomOut, Calendar, LucideIcon } from 'lucide-react'
+import { format, addDays, addMonths, differenceInDays, startOfWeek, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isToday, isSameMonth, parseISO } from 'date-fns'
+import { ChevronDown, ChevronRight, ZoomIn, ZoomOut, Calendar, GitBranch } from 'lucide-react'
 import { Task } from '../../types'
 
 type Zoom = 'day' | 'week' | 'month'
+
+export interface BaselineTask {
+  id: number
+  start_date?: string
+  end_date?: string
+}
 
 interface GanttProps {
   tasks: Task[]
@@ -11,6 +17,8 @@ interface GanttProps {
   onTaskUpdate?: (id: number, start: string, end: string) => void
   projectStart?: string
   projectEnd?: string
+  baseline?: BaselineTask[]
+  baselineName?: string
 }
 
 const STATUS_COLORS: Record<string, { bar: string; progress: string }> = {
@@ -67,9 +75,10 @@ function flattenTree(tasks: Task[], expanded: Set<number>, depth = 0): Array<Tas
   return result
 }
 
-export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectStart, projectEnd }: GanttProps) {
+export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectStart, projectEnd, baseline, baselineName }: GanttProps) {
   const [zoom, setZoom] = useState<Zoom>('week')
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set(tasks.filter(t => !t.parent_id).map(t => t.id)))
+  const [showBaseline, setShowBaseline] = useState(true)
   const timelineRef = useRef<HTMLDivElement>(null)
   const leftRef = useRef<HTMLDivElement>(null)
 
@@ -156,6 +165,18 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
           <button onClick={() => { const i = zoomLevels.indexOf(zoom); if (i < 2) setZoom(zoomLevels[i + 1]) }} className="p-1 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30" disabled={zoom === 'month'}>
             <ZoomOut size={14} />
           </button>
+          {baseline && baseline.length > 0 && (
+            <>
+              <div className="w-px h-4 bg-gray-200 mx-1" />
+              <button
+                onClick={() => setShowBaseline(v => !v)}
+                className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded-lg font-medium transition-colors ${showBaseline ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+              >
+                <GitBranch size={12} />
+                {baselineName || 'Baseline'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -273,6 +294,22 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
                 {/* Today line */}
                 <line x1={todayX} y1={0} x2={todayX} y2={totalHeight} stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 4" opacity={0.8} />
 
+                {/* Baseline ghost bars */}
+                {showBaseline && baseline && flatTasks.map((task, i) => {
+                  const bl = baseline.find(b => b.id === task.id)
+                  if (!bl?.start_date || !bl?.end_date) return null
+                  const bx = xOf(parseISO(bl.start_date))
+                  const bEndX = xOf(addDays(parseISO(bl.end_date), 1))
+                  const bw = Math.max(bEndX - bx, 4)
+                  const by = i * ROW_HEIGHT + ROW_HEIGHT - 10
+                  return (
+                    <g key={`bl-${task.id}`} opacity={0.7}>
+                      <rect x={bx} y={by} width={bw} height={4} rx={2} fill="#8b5cf6" />
+                      <title>{`Baseline: ${bl.start_date} → ${bl.end_date}`}</title>
+                    </g>
+                  )
+                })}
+
                 {/* Task bars */}
                 {flatTasks.map((task, i) => {
                   if (!task.start_date || !task.end_date) return null
@@ -285,7 +322,7 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
                   const progressW = Math.max(w * (task.completion_percent / 100), 0)
                   const isCritical = task.is_critical === 1
 
-                  // Milestone (no duration or story points = milestone if task is very short)
+                  // Milestone (no duration)
                   const durationDays = differenceInDays(parseISO(task.end_date), parseISO(task.start_date))
                   if (durationDays === 0) {
                     const mx = xOf(parseISO(task.start_date))
@@ -371,6 +408,12 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
           <div className="w-0.5 h-4" style={{ background: 'repeating-linear-gradient(180deg, #3b82f6 0px, #3b82f6 4px, transparent 4px, transparent 8px)' }} />
           <span>Today</span>
         </div>
+        {baseline && baseline.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-1 rounded bg-purple-500" />
+            <span>Baseline</span>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -10,7 +10,8 @@ import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus, Issue, ChangeRe
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
-import GanttChart from '../components/gantt/GanttChart'
+import GanttChart, { BaselineTask } from '../components/gantt/GanttChart'
+import TaskComments from '../components/ui/TaskComments'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import RiskForm from '../components/forms/RiskForm'
@@ -31,6 +32,76 @@ function formatCurrency(n: number): string {
 const BUDGET_COLORS: Record<string, string> = {
   labor: '#3b82f6', materials: '#10b981', infrastructure: '#8b5cf6',
   software: '#f59e0b', equipment: '#06b6d4', travel: '#ec4899', overhead: '#6366f1', other: '#94a3b8',
+}
+
+function GanttTabWrapper({ projectId, tasks, projectStart, projectEnd, onTaskClick, onSaved }: {
+  projectId: number; tasks: Task[]; projectStart?: string; projectEnd?: string
+  onTaskClick: (t: Task) => void; onSaved: (msg: string) => void
+}) {
+  const [baselines, setBaselines] = useState<Array<{ id: number; name: string; created_at: string }>>([])
+  const [activeBaseline, setActiveBaseline] = useState<BaselineTask[] | undefined>()
+  const [activeBaselineName, setActiveBaselineName] = useState<string>()
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    projectsApi.getBaselines(projectId).then(r => setBaselines(r.data.baselines))
+  }, [projectId])
+
+  const handleLoadBaseline = async (id: number, name: string) => {
+    const r = await projectsApi.getBaseline(projectId, id)
+    setActiveBaseline(r.data.baseline_data.tasks as BaselineTask[])
+    setActiveBaselineName(name)
+  }
+
+  const handleSaveBaseline = async () => {
+    const name = prompt('Baseline name:', `Baseline ${new Date().toLocaleDateString()}`)
+    if (!name) return
+    setSaving(true)
+    try {
+      const r = await projectsApi.saveBaseline(projectId, { name })
+      setBaselines(prev => [r.data.baseline, ...prev])
+      onSaved('Baseline saved!')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={handleSaveBaseline} disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 transition-colors">
+          {saving ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <GitBranch size={13} />}
+          Save Baseline
+        </button>
+        {baselines.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Compare with:</span>
+            <select
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={activeBaselineName ? baselines.find(b => b.name === activeBaselineName)?.id ?? '' : ''}
+              onChange={e => {
+                const id = Number(e.target.value)
+                const bl = baselines.find(b => b.id === id)
+                if (bl) handleLoadBaseline(id, bl.name)
+                else { setActiveBaseline(undefined); setActiveBaselineName(undefined) }
+              }}
+            >
+              <option value="">None</option>
+              {baselines.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            {activeBaselineName && (
+              <button onClick={() => { setActiveBaseline(undefined); setActiveBaselineName(undefined) }}
+                className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="h-[calc(100vh-340px)] min-h-[480px]">
+        <GanttChart tasks={tasks} onTaskClick={onTaskClick}
+          projectStart={projectStart} projectEnd={projectEnd}
+          baseline={activeBaseline} baselineName={activeBaselineName} />
+      </div>
+    </div>
+  )
 }
 
 function EVMGauge({ label, value, good, bad }: { label: string; value: number; good: boolean; bad: boolean }) {
@@ -591,10 +662,14 @@ export default function ProjectDetail() {
 
       {/* ── GANTT ── */}
       {activeTab === 'gantt' && (
-        <div className="h-[calc(100vh-300px)] min-h-[500px]">
-          <GanttChart tasks={tasks} onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
-            projectStart={project.start_date} projectEnd={project.end_date} />
-        </div>
+        <GanttTabWrapper
+          projectId={project.id}
+          tasks={tasks}
+          projectStart={project.start_date}
+          projectEnd={project.end_date}
+          onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
+          onSaved={toast.success}
+        />
       )}
 
       {/* ── SPRINTS ── */}
@@ -1046,8 +1121,16 @@ export default function ProjectDetail() {
       )}
 
       {/* ── Modals ── */}
-      <Modal isOpen={showTaskForm} onClose={() => { setShowTaskForm(false); setEditTask(null) }} title={editTask ? 'Edit Task' : 'New Task'} size="md">
+      <Modal isOpen={showTaskForm} onClose={() => { setShowTaskForm(false); setEditTask(null) }} title={editTask ? 'Edit Task' : 'New Task'} size="lg">
         <TaskForm task={editTask || undefined} defaultStatus={defaultTaskStatus} onSubmit={handleTaskSave} onCancel={() => { setShowTaskForm(false); setEditTask(null) }} loading={savingTask} />
+        {editTask?.id && (
+          <div className="mt-5 pt-4 border-t border-gray-200">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <Activity size={14} className="text-gray-400" /> Discussion
+            </h4>
+            <TaskComments taskId={editTask.id} />
+          </div>
+        )}
       </Modal>
 
       <Modal isOpen={showRiskForm} onClose={() => { setShowRiskForm(false); setEditRisk(null) }} title={editRisk ? 'Edit Risk' : 'Add Risk'} size="md">

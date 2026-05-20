@@ -22,6 +22,7 @@ import evmRoutes from './routes/evm'
 import issuesRoutes from './routes/issues'
 import timesheetsRoutes from './routes/timesheets'
 import templatesRoutes from './routes/templates'
+import commentsRoutes from './routes/comments'
 
 initializeDatabase()
 
@@ -59,6 +60,7 @@ app.use('/api/evm', evmRoutes)
 app.use('/api/issues', issuesRoutes)
 app.use('/api/timesheets', timesheetsRoutes)
 app.use('/api/templates', templatesRoutes)
+app.use('/api/comments', commentsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')
