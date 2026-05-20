@@ -5,7 +5,7 @@ import {
   AlertTriangle, GitBranch, List, Kanban, Edit, CheckCircle, Activity,
   FileText, Bug, ExternalLink, TrendingUp, TrendingDown, Minus, XCircle
 } from 'lucide-react'
-import { projectsApi, tasksApi, risksApi, budgetApi, issuesApi, changeRequestsApi, evmApi, sprintsApi } from '../api'
+import { projectsApi, tasksApi, risksApi, budgetApi, issuesApi, changeRequestsApi, evmApi, sprintsApi, resourcesApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus, Issue, ChangeRequest, EVMData, Sprint } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
@@ -82,6 +82,10 @@ export default function ProjectDetail() {
   const [editMilestone, setEditMilestone] = useState<Milestone | null>(null)
   const [milestoneForm, setMilestoneForm] = useState({ name: '', date: '', status: 'upcoming', description: '' })
   const [showDocForm, setShowDocForm] = useState(false)
+  const [teamView, setTeamView] = useState<'list' | 'raci'>('list')
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [allUsers, setAllUsers] = useState<Array<{ id: number; name: string; email: string; department?: string }>>([])
+  const [addMemberForm, setAddMemberForm] = useState({ user_id: '', role: 'member', allocation_percent: 100 })
   const [docForm, setDocForm] = useState({ name: '', url: '', description: '', doc_type: 'link' })
 
   const loadProject = useCallback(async () => {
@@ -115,6 +119,12 @@ export default function ProjectDetail() {
     setLoading(true)
     loadProject().finally(() => setLoading(false))
   }, [loadProject])
+
+  useEffect(() => {
+    if (activeTab === 'team' && allUsers.length === 0) {
+      resourcesApi.users().then(r => setAllUsers(r.data.users))
+    }
+  }, [activeTab])
 
   const handleTaskUpdate = async (taskId: number, status: TaskStatus) => {
     await tasksApi.update(taskId, { ...tasks.find(t => t.id === taskId), status })
@@ -212,6 +222,27 @@ export default function ProjectDetail() {
       setDocForm({ name: '', url: '', description: '', doc_type: 'link' })
       toast.success('Document added')
     } catch { toast.error('Failed to add document') }
+  }
+
+  const handleAddMember = async () => {
+    if (!addMemberForm.user_id) return
+    try {
+      await projectsApi.addMember(Number(id), addMemberForm)
+      const res = await projectsApi.get(Number(id))
+      setMembers(res.data.members)
+      setShowAddMember(false)
+      setAddMemberForm({ user_id: '', role: 'member', allocation_percent: 100 })
+      toast.success('Member added')
+    } catch { toast.error('Failed to add member') }
+  }
+
+  const handleRemoveMember = async (userId: number, name: string) => {
+    if (!confirm(`Remove ${name} from this project?`)) return
+    try {
+      await projectsApi.removeMember(Number(id), userId)
+      setMembers(prev => prev.filter(m => m.id !== userId))
+      toast.success('Member removed')
+    } catch { toast.error('Failed to remove member') }
   }
 
   if (loading) return (
@@ -801,40 +832,163 @@ export default function ProjectDetail() {
 
       {/* ── TEAM ── */}
       {activeTab === 'team' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Member</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Department</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Role</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-5 py-3">Allocation</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {members.map(m => (
-                <tr key={m.id} className="hover:bg-gray-50">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={m.name} size="sm" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-800">{m.name}</div>
-                        <div className="text-xs text-gray-400">{m.email}</div>
-                      </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                <button onClick={() => setTeamView('list')} className={`px-3 py-1.5 text-sm transition-colors ${teamView === 'list' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>Member List</button>
+                <button onClick={() => setTeamView('raci')} className={`px-3 py-1.5 text-sm transition-colors ${teamView === 'raci' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>RACI Matrix</button>
+              </div>
+            </div>
+            <button onClick={async () => { setShowAddMember(true) }} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+              <Plus size={14} /> Add Member
+            </button>
+          </div>
+
+          {teamView === 'list' ? (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    {['Member', 'Department', 'Role', 'Allocation', ''].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-gray-500 px-5 py-3">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {members.map(m => (
+                    <tr key={m.id} className="hover:bg-gray-50 group">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={m.name} size="sm" />
+                          <div>
+                            <div className="text-sm font-medium text-gray-800">{m.name}</div>
+                            <div className="text-xs text-gray-400">{m.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-gray-500">{m.department || '—'}</td>
+                      <td className="px-5 py-3 text-sm text-gray-600 capitalize">{m.role}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <Progress value={m.allocation_percent} max={100} size="sm" className="w-24" />
+                          <span className="text-sm font-medium text-gray-700">{m.allocation_percent}%</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <button onClick={() => handleRemoveMember(m.id, m.name)} className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {members.length === 0 && (
+                    <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-400">No team members assigned</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">RACI Matrix</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Task assignments by team member</p>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  {[['R', 'Responsible', 'bg-blue-500'], ['A', 'Accountable', 'bg-purple-500'], ['C', 'Consulted', 'bg-green-500'], ['I', 'Informed', 'bg-gray-400']].map(([k, v, c]) => (
+                    <div key={k} className="flex items-center gap-1">
+                      <span className={`w-5 h-5 ${c} text-white text-xs font-bold rounded flex items-center justify-center`}>{k}</span>
+                      <span className="text-gray-500">{v}</span>
                     </div>
-                  </td>
-                  <td className="px-5 py-3 text-sm text-gray-500">{m.department || '—'}</td>
-                  <td className="px-5 py-3 text-sm text-gray-600 capitalize">{m.role}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <Progress value={m.allocation_percent} max={100} size="sm" className="w-24" />
-                      <span className="text-sm font-medium text-gray-700">{m.allocation_percent}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  ))}
+                </div>
+              </div>
+              <div className="overflow-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b">
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 sticky left-0 bg-gray-50 z-10 min-w-[200px]">Deliverable / Task</th>
+                      {members.map(m => (
+                        <th key={m.id} className="text-center text-xs font-semibold text-gray-500 px-3 py-3 min-w-[90px]">
+                          <div className="flex flex-col items-center gap-1">
+                            <Avatar name={m.name} size="xs" />
+                            <span className="truncate max-w-[80px]">{m.name.split(' ')[0]}</span>
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {tasks.filter(t => !t.parent_id).slice(0, 20).map(task => (
+                      <tr key={task.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 sticky left-0 bg-white z-10">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${task.status === 'done' ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : task.status === 'blocked' ? 'bg-red-500' : 'bg-gray-300'}`} />
+                            <span className="text-sm text-gray-700 truncate max-w-[170px]">{task.name}</span>
+                          </div>
+                        </td>
+                        {members.map(m => {
+                          const isAssignee = task.assignee_id === m.id
+                          const isPM = m.role === 'manager' || m.role === 'lead' || m.id === project?.manager_id
+                          let role = ''
+                          let cls = ''
+                          if (isAssignee) { role = 'R'; cls = 'bg-blue-500 text-white' }
+                          else if (isPM && !isAssignee) { role = 'A'; cls = 'bg-purple-500 text-white' }
+                          return (
+                            <td key={m.id} className="px-3 py-2.5 text-center">
+                              {role ? (
+                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold ${cls}`}>{role}</span>
+                              ) : (
+                                <span className="text-gray-200">·</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                    {tasks.filter(t => !t.parent_id).length === 0 && (
+                      <tr><td colSpan={members.length + 1} className="px-5 py-8 text-center text-sm text-gray-400">No tasks to display</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Add Member Modal */}
+          {showAddMember && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <h3 className="font-semibold text-gray-900">Add Team Member</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Team Member</label>
+                  <select value={addMemberForm.user_id} onChange={e => setAddMemberForm(f => ({ ...f, user_id: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select person...</option>
+                    {allUsers.filter(u => !members.find(m => m.id === u.id)).map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.department || 'No dept'})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Project Role</label>
+                  <select value={addMemberForm.role} onChange={e => setAddMemberForm(f => ({ ...f, role: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {['member', 'lead', 'manager', 'consultant', 'stakeholder'].map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Allocation %</label>
+                  <input type="number" min="0" max="100" value={addMemberForm.allocation_percent} onChange={e => setAddMemberForm(f => ({ ...f, allocation_percent: Number(e.target.value) }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setShowAddMember(false)} className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onClick={handleAddMember} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Add Member</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
