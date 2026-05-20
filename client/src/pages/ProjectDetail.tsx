@@ -19,7 +19,7 @@ import RiskForm from '../components/forms/RiskForm'
 import IssueForm from '../components/forms/IssueForm'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO, isPast, differenceInDays } from 'date-fns'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadialBarChart, RadialBar } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadialBarChart, RadialBar, LineChart, Line, Legend } from 'recharts'
 import { useToast } from '../components/ui/Toast'
 
 type Tab = 'overview' | 'tasks' | 'gantt' | 'network' | 'budget' | 'risks' | 'issues' | 'changes' | 'sprints' | 'team' | 'docs'
@@ -43,10 +43,19 @@ function GanttTabWrapper({ projectId, tasks, projectStart, projectEnd, onTaskCli
   const [activeBaseline, setActiveBaseline] = useState<BaselineTask[] | undefined>()
   const [activeBaselineName, setActiveBaselineName] = useState<string>()
   const [saving, setSaving] = useState(false)
+  const [computingCPM, setComputingCPM] = useState(false)
 
   useEffect(() => {
     projectsApi.getBaselines(projectId).then(r => setBaselines(r.data.baselines))
   }, [projectId])
+
+  const handleComputeCPM = async () => {
+    setComputingCPM(true)
+    try {
+      const r = await projectsApi.computeCPM(projectId)
+      onSaved(`Critical path computed: ${r.data.critical_count} critical tasks identified`)
+    } finally { setComputingCPM(false) }
+  }
 
   const handleLoadBaseline = async (id: number, name: string) => {
     const r = await projectsApi.getBaseline(projectId, id)
@@ -68,6 +77,11 @@ function GanttTabWrapper({ projectId, tasks, projectStart, projectEnd, onTaskCli
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={handleComputeCPM} disabled={computingCPM}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 transition-colors">
+          {computingCPM ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Activity size={13} />}
+          Compute Critical Path
+        </button>
         <button onClick={handleSaveBaseline} disabled={saving}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 transition-colors">
           {saving ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <GitBranch size={13} />}
@@ -138,6 +152,7 @@ export default function ProjectDetail() {
   const [documents, setDocuments] = useState<Array<{ id: number; name: string; url?: string; description?: string; doc_type: string; uploaded_by_name?: string; created_at: string }>>([])
   const [loading, setLoading] = useState(true)
   const [taskView, setTaskView] = useState<'kanban' | 'list'>('kanban')
+  const [sCurve, setSCurve] = useState<{ actual: any[]; planned: any[]; totalTasks: number } | null>(null)
 
   // Modal states
   const [showTaskForm, setShowTaskForm] = useState(false)
@@ -197,6 +212,9 @@ export default function ProjectDetail() {
   useEffect(() => {
     if (activeTab === 'team' && allUsers.length === 0) {
       resourcesApi.users().then(r => setAllUsers(r.data.users))
+    }
+    if (activeTab === 'overview' && !sCurve && id) {
+      projectsApi.getSCurve(Number(id)).then(r => setSCurve(r.data)).catch(() => {})
     }
   }, [activeTab])
 
@@ -527,6 +545,33 @@ export default function ProjectDetail() {
               )}
             </div>
           </div>
+
+          {/* S-Curve chart */}
+          {sCurve && (sCurve.actual.length > 0 || sCurve.planned.length > 0) && (
+            <div className="col-span-12 lg:col-span-8">
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <TrendingUp size={16} className="text-blue-500" /> Progress S-Curve
+                  <span className="text-xs text-gray-400 font-normal ml-auto">{sCurve.totalTasks} total tasks</span>
+                </h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={d => d?.slice(5) || ''} allowDuplicatedCategory={false} />
+                    <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} tickFormatter={v => `${v}%`} />
+                    <Tooltip formatter={(v: number) => [`${v}%`, '']} labelFormatter={l => `Date: ${l}`} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {sCurve.planned.length > 0 && (
+                      <Line data={sCurve.planned} type="monotone" dataKey="planned_percent" stroke="#94a3b8" strokeDasharray="5 5" dot={false} name="Planned" />
+                    )}
+                    {sCurve.actual.length > 0 && (
+                      <Line data={sCurve.actual} type="monotone" dataKey="percent" stroke="#3b82f6" strokeWidth={2} dot={false} name="Actual" />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
           <div className="col-span-12 lg:col-span-4 space-y-5">
             {/* Risk summary */}

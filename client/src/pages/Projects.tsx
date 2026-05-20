@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react'
-import { projectsApi } from '../api'
+import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, ChevronUp, ChevronDown, Download } from 'lucide-react'
+import { projectsApi, portfoliosApi } from '../api'
 import { Project } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
@@ -26,10 +26,11 @@ function formatCurrency(n: number): string {
 
 export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [portfolios, setPortfolios] = useState<Array<{ id: number; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'grid' | 'list'>('list')
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ status: '', health: '', priority: '' })
+  const [filters, setFilters] = useState({ status: '', health: '', priority: '', portfolio_id: '' })
   const [showFilters, setShowFilters] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -42,10 +43,12 @@ export default function Projects() {
     if (filters.status) params.status = filters.status
     if (filters.health) params.health = filters.health
     if (filters.priority) params.priority = filters.priority
+    if (filters.portfolio_id) params.portfolio_id = filters.portfolio_id
     projectsApi.list(params).then(r => setProjects(r.data.projects)).finally(() => setLoading(false))
   }
 
   useEffect(() => { fetchProjects() }, [filters])
+  useEffect(() => { portfoliosApi.list().then(r => setPortfolios(r.data.portfolios)) }, [])
 
   const filtered = useMemo(() => {
     const searched = projects.filter(p =>
@@ -77,6 +80,24 @@ export default function Projects() {
     return sortDir === 'asc' ? <ChevronUp size={12} className="text-blue-500" /> : <ChevronDown size={12} className="text-blue-500" />
   }
 
+  const exportCSV = () => {
+    const rows = [
+      ['Name', 'Status', 'Health', 'Priority', 'Progress%', 'Budget', 'Spent', 'Start Date', 'End Date', 'Manager', 'Portfolio'],
+      ...filtered.map(p => [
+        p.name, p.status, p.health, p.priority, String(p.completion_percent),
+        String(p.budget || 0), String(p.spent || 0),
+        p.start_date || '', p.end_date || '',
+        (p as any).manager_name || '', (p as any).portfolio_name || '',
+      ])
+    ]
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `projects-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
   const handleCreate = async (data: Partial<Project>) => {
     setCreating(true)
     try {
@@ -101,9 +122,14 @@ export default function Projects() {
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
           <p className="text-sm text-gray-500 mt-0.5">{stats.active} active · {stats.onTrack} on track · {stats.atRisk} needs attention</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus size={16} /> New Project
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCSV} className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+            <Download size={14} /> Export
+          </button>
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={16} /> New Project
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -133,7 +159,11 @@ export default function Projects() {
           <select value={filters.priority} onChange={e => setFilters(f => ({ ...f, priority: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
             {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p || 'All Priority'}</option>)}
           </select>
-          <button onClick={() => setFilters({ status: '', health: '', priority: '' })} className="text-sm text-red-500 hover:text-red-700 ml-auto">Clear Filters</button>
+          <select value={filters.portfolio_id} onChange={e => setFilters(f => ({ ...f, portfolio_id: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All Portfolios</option>
+            {portfolios.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+          </select>
+          <button onClick={() => setFilters({ status: '', health: '', priority: '', portfolio_id: '' })} className="text-sm text-red-500 hover:text-red-700 ml-auto">Clear Filters</button>
         </div>
       )}
 

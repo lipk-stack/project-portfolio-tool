@@ -65,6 +65,8 @@ export const projectsApi = {
   saveBaseline: (id: number, data: object) => api.post(`/projects/${id}/baselines`, data),
   getBaseline: (id: number, bid: number) => api.get(`/projects/${id}/baselines/${bid}`),
   deleteBaseline: (id: number, bid: number) => api.delete(`/projects/${id}/baselines/${bid}`),
+  computeCPM: (id: number) => api.post(`/projects/${id}/compute-cpm`, {}),
+  getSCurve: (id: number) => api.get(`/projects/${id}/s-curve`),
 }
 
 export const commentsApi = {

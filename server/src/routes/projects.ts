@@ -200,6 +200,127 @@ router.get('/:id/time-entries', authenticate, (req: Request, res: Response) => {
   res.json({ entries })
 })
 
+// CPM: compute critical path and update is_critical flags
+router.post('/:id/compute-cpm', authenticate, (req: Request, res: Response) => {
+  const projectId = req.params.id
+  const rawTasks = db.prepare('SELECT id, start_date, end_date FROM tasks WHERE project_id = ? AND parent_id IS NULL').all(projectId) as Array<{ id: number; start_date: string | null; end_date: string | null }>
+
+  const deps = db.prepare(`
+    SELECT td.predecessor_id, td.successor_id FROM task_dependencies td
+    JOIN tasks t ON t.id = td.predecessor_id WHERE t.project_id = ?
+  `).all(projectId) as Array<{ predecessor_id: number; successor_id: number }>
+
+  // Build predecessor/successor maps
+  const preds = new Map<number, number[]>()
+  const succs = new Map<number, number[]>()
+  for (const t of rawTasks) { preds.set(t.id, []); succs.set(t.id, []) }
+  for (const d of deps) {
+    preds.get(d.successor_id)?.push(d.predecessor_id)
+    succs.get(d.predecessor_id)?.push(d.successor_id)
+  }
+
+  function daysBetween(a: string | null, b: string | null): number {
+    if (!a || !b) return 1
+    return Math.max(1, Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 86400000))
+  }
+
+  const dur = new Map<number, number>()
+  for (const t of rawTasks) dur.set(t.id, daysBetween(t.start_date, t.end_date))
+
+  // Forward pass
+  const es = new Map<number, number>()
+  const ef = new Map<number, number>()
+
+  function forwardPass(id: number): number {
+    if (ef.has(id)) return ef.get(id)!
+    const predEFs = (preds.get(id) || []).map(p => forwardPass(p))
+    const start = predEFs.length ? Math.max(...predEFs) : 0
+    es.set(id, start)
+    ef.set(id, start + (dur.get(id) || 1))
+    return ef.get(id)!
+  }
+  for (const t of rawTasks) forwardPass(t.id)
+
+  const projectEnd = Math.max(...[...ef.values()])
+
+  // Backward pass
+  const ls = new Map<number, number>()
+  const lf = new Map<number, number>()
+
+  function backwardPass(id: number): number {
+    if (ls.has(id)) return ls.get(id)!
+    const succLSs = (succs.get(id) || []).map(s => backwardPass(s))
+    const finish = succLSs.length ? Math.min(...succLSs) : projectEnd
+    lf.set(id, finish)
+    ls.set(id, finish - (dur.get(id) || 1))
+    return ls.get(id)!
+  }
+  for (const t of rawTasks) backwardPass(t.id)
+
+  // Tasks with TF = 0 are critical
+  const criticalIds = new Set<number>()
+  for (const t of rawTasks) {
+    const tf = (ls.get(t.id) || 0) - (es.get(t.id) || 0)
+    if (tf === 0) criticalIds.add(t.id)
+  }
+
+  // Update is_critical
+  db.prepare('UPDATE tasks SET is_critical = 0 WHERE project_id = ?').run(projectId)
+  for (const id of criticalIds) {
+    db.prepare('UPDATE tasks SET is_critical = 1 WHERE id = ?').run(id)
+  }
+
+  res.json({
+    critical_count: criticalIds.size,
+    total_count: rawTasks.length,
+    critical_ids: [...criticalIds],
+    project_duration: projectEnd,
+  })
+})
+
+// S-curve data: cumulative task completion over time
+router.get('/:id/s-curve', authenticate, (req: Request, res: Response) => {
+  const completionHistory = db.prepare(`
+    SELECT DATE(updated_at) as date,
+      SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done_count,
+      COUNT(*) as total_count
+    FROM tasks
+    WHERE project_id = ? AND parent_id IS NULL
+    GROUP BY DATE(updated_at)
+    ORDER BY DATE(updated_at) ASC
+  `).all(req.params.id) as Array<{ date: string; done_count: number; total_count: number }>
+
+  const project = db.prepare('SELECT start_date, end_date, budget FROM projects WHERE id = ?').get(req.params.id) as { start_date: string; end_date: string; budget: number }
+
+  // Build cumulative timeline
+  let cumDone = 0
+  const totalTasks = (db.prepare('SELECT COUNT(*) as c FROM tasks WHERE project_id = ? AND parent_id IS NULL').get(req.params.id) as { c: number }).c
+  const points = completionHistory.map(row => {
+    cumDone += row.done_count
+    return { date: row.date, cumulative_done: cumDone, percent: totalTasks > 0 ? Math.round((cumDone / totalTasks) * 100) : 0 }
+  })
+
+  // Build planned S-curve (uniform distribution from project start to end)
+  const plannedPoints: Array<{ date: string; planned_percent: number }> = []
+  if (project?.start_date && project?.end_date) {
+    const start = new Date(project.start_date)
+    const end = new Date(project.end_date)
+    const totalMs = end.getTime() - start.getTime()
+    const totalDays = Math.ceil(totalMs / 86400000)
+    const step = Math.max(1, Math.floor(totalDays / 10))
+    for (let i = 0; i <= totalDays; i += step) {
+      const d = new Date(start)
+      d.setDate(d.getDate() + i)
+      // S-curve uses logistic function for realistic shape
+      const t = i / totalDays
+      const sCurve = Math.round(100 / (1 + Math.exp(-10 * (t - 0.5))))
+      plannedPoints.push({ date: d.toISOString().split('T')[0], planned_percent: sCurve })
+    }
+  }
+
+  res.json({ actual: points, planned: plannedPoints, totalTasks })
+})
+
 // Baselines
 router.get('/:id/baselines', authenticate, (req: Request, res: Response) => {
   const baselines = db.prepare('SELECT id, name, created_at FROM project_baselines WHERE project_id = ? ORDER BY created_at DESC').all(req.params.id)
