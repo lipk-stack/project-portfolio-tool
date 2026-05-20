@@ -140,4 +140,12 @@ export const issuesApi = {
   delete: (id: number) => api.delete(`/issues/${id}`),
 }
 
+export const timesheetsApi = {
+  list: (start: string, end: string) => api.get('/timesheets', { params: { start, end } }),
+  teamSummary: (start: string, end: string) => api.get('/timesheets/team-summary', { params: { start, end } }),
+  create: (data: object) => api.post('/timesheets', data),
+  update: (id: number, data: object) => api.put(`/timesheets/${id}`, data),
+  delete: (id: number) => api.delete(`/timesheets/${id}`),
+}
+
 export default api

@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  GitBranch, Zap, Moon, Sun, FileText
+  GitBranch, Zap, Moon, Sun, FileText, Clock
 } from 'lucide-react'
 import { useUIStore } from '../../store'
 
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/projects', label: 'Projects', icon: FolderOpen },
   { to: '/sprints', label: 'Sprints', icon: GitBranch },
+  { to: '/timesheets', label: 'Timesheets', icon: Clock },
   { to: '/resources', label: 'Resources', icon: Users },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/change-requests', label: 'Changes', icon: FileText },

@@ -55,6 +55,29 @@ router.delete('/:id', authenticate, (req: Request, res: Response) => {
 })
 
 router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) => {
+  const totals = db.prepare(`
+    SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN status != 'closed' THEN 1 ELSE 0 END) as open,
+      SUM(CASE WHEN score >= 6 AND status != 'closed' THEN 1 ELSE 0 END) as high
+    FROM risks
+  `).get() as { total: number; open: number; high: number }
+
+  const byCategory = db.prepare(`
+    SELECT COALESCE(category, 'general') as category, COUNT(*) as count
+    FROM risks WHERE status != 'closed'
+    GROUP BY category ORDER BY count DESC
+  `).all()
+
+  const byProject = db.prepare(`
+    SELECT p.name as project_name,
+      COUNT(*) as count,
+      SUM(CASE WHEN r.score >= 6 THEN 1 ELSE 0 END) as high_count
+    FROM risks r JOIN projects p ON p.id = r.project_id
+    WHERE r.status != 'closed'
+    GROUP BY p.id ORDER BY count DESC
+  `).all()
+
   const risksByProject = db.prepare(`
     SELECT p.id as project_id, p.name as project_name, p.color,
       COUNT(*) as total_risks,
@@ -70,7 +93,7 @@ router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) =>
     GROUP BY probability, impact
   `).all()
 
-  res.json({ risksByProject, riskMatrix })
+  res.json({ ...totals, byCategory, byProject, risksByProject, riskMatrix })
 })
 
 export default router

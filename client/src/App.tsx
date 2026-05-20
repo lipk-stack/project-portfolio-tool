@@ -12,6 +12,7 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Sprints from './pages/Sprints'
 import ChangeRequests from './pages/ChangeRequests'
+import Timesheets from './pages/Timesheets'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/:tab" element={<ProjectDetail />} />
           <Route path="sprints" element={<Sprints />} />
+          <Route path="timesheets" element={<Timesheets />} />
           <Route path="resources" element={<Resources />} />
           <Route path="reports" element={<Reports />} />
           <Route path="change-requests" element={<ChangeRequests />} />
