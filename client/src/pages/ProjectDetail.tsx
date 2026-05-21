@@ -480,6 +480,20 @@ export default function ProjectDetail() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={async () => {
+                const name = prompt(`Clone project as:`, `${project.name} (Copy)`)
+                if (name === null) return
+                try {
+                  const r = await projectsApi.clone(project.id, name || undefined)
+                  navigate(`/projects/${r.data.project.id}`)
+                } catch { alert('Clone failed') }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+              title="Clone this project"
+            >
+              <Save size={14} /> Clone
+            </button>
+            <button
               onClick={() => window.open(`/print/project/${project.id}`, '_blank')}
               className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
               title="Export PDF Report"

@@ -33,7 +33,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0 z-20">
+      <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6 flex-shrink-0 z-20">
         {/* Search trigger */}
         <div className="flex items-center gap-3 flex-1 max-w-md">
           <button

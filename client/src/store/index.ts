@@ -29,10 +29,22 @@ export const useAuthStore = create<AuthState>(set => ({
 
 interface UIState {
   sidebarCollapsed: boolean
+  darkMode: boolean
   toggleSidebar: () => void
+  toggleDarkMode: () => void
 }
+
+const storedDark = localStorage.getItem('darkMode') === 'true'
+if (storedDark) document.documentElement.classList.add('dark')
 
 export const useUIStore = create<UIState>(set => ({
   sidebarCollapsed: false,
+  darkMode: storedDark,
   toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  toggleDarkMode: () => set(s => {
+    const next = !s.darkMode
+    localStorage.setItem('darkMode', String(next))
+    document.documentElement.classList.toggle('dark', next)
+    return { darkMode: next }
+  }),
 }))

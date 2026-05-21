@@ -108,6 +108,52 @@ router.delete('/:id', authenticate, (req: Request, res: Response) => {
   res.json({ success: true })
 })
 
+router.post('/:id/clone', authenticate, (req: Request, res: Response) => {
+  const source = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as Record<string, any> | undefined
+  if (!source) return res.status(404).json({ error: 'Project not found' })
+
+  const { name } = req.body
+  const cloneName = name || `${source.name} (Copy)`
+
+  const cloneResult = db.prepare(`
+    INSERT INTO projects (portfolio_id, name, description, status, priority, health, phase,
+      start_date, end_date, budget, manager_id, color, tags)
+    VALUES (?, ?, ?, 'planning', ?, 'green', ?, ?, ?, ?, ?, ?, ?)
+  `).run(source.portfolio_id, cloneName, source.description, source.priority,
+    source.phase, source.start_date, source.end_date, source.budget,
+    source.manager_id, source.color, source.tags)
+
+  const newId = cloneResult.lastInsertRowid
+
+  const tasks = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND parent_id IS NULL ORDER BY position ASC').all(req.params.id) as Array<Record<string, any>>
+  const taskIdMap: Record<number, number> = {}
+  for (const t of tasks) {
+    const r = db.prepare(`
+      INSERT INTO tasks (project_id, name, description, status, priority, wbs_code, estimated_hours,
+        start_date, end_date, position, sprint, story_points, tags)
+      VALUES (?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(newId, t.name, t.description, t.priority, t.wbs_code, t.estimated_hours,
+      t.start_date, t.end_date, t.position, t.sprint, t.story_points, t.tags)
+    taskIdMap[t.id as number] = r.lastInsertRowid as number
+  }
+
+  const milestones = db.prepare('SELECT * FROM milestones WHERE project_id = ?').all(req.params.id) as Array<Record<string, any>>
+  for (const m of milestones) {
+    db.prepare('INSERT INTO milestones (project_id, name, date, status) VALUES (?, ?, ?, ?)').run(newId, m.name, m.date, 'upcoming')
+  }
+
+  const risks = db.prepare('SELECT * FROM risks WHERE project_id = ?').all(req.params.id) as Array<Record<string, any>>
+  for (const r of risks) {
+    db.prepare(`INSERT INTO risks (project_id, title, description, probability, impact, score, status, category, mitigation_plan)
+      VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)`).run(newId, r.title, r.description, r.probability, r.impact, r.score, r.category, r.mitigation_plan)
+  }
+
+  db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', newId, req.user!.userId, 'created', JSON.stringify({ name: cloneName, cloned_from: source.name }))
+
+  const newProject = db.prepare('SELECT * FROM projects WHERE id = ?').get(newId)
+  res.status(201).json({ project: newProject })
+})
+
 router.get('/:id/members', authenticate, (req: Request, res: Response) => {
   const members = db.prepare(`
     SELECT u.id, u.name, u.email, u.department, u.capacity, pm.role, pm.allocation_percent

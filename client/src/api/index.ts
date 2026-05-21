@@ -47,6 +47,7 @@ export const projectsApi = {
   create: (data: object) => api.post('/projects', data),
   update: (id: number, data: object) => api.put(`/projects/${id}`, data),
   delete: (id: number) => api.delete(`/projects/${id}`),
+  clone: (id: number, name?: string) => api.post(`/projects/${id}/clone`, { name }),
   getMembers: (id: number) => api.get(`/projects/${id}/members`),
   addMember: (id: number, data: object) => api.post(`/projects/${id}/members`, data),
   removeMember: (id: number, userId: number) => api.delete(`/projects/${id}/members/${userId}`),

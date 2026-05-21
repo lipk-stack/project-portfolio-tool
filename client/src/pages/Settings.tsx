@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { useAuthStore } from '../store'
+import { useAuthStore, useUIStore } from '../store'
 import Card from '../components/ui/Card'
-import { User, Shield, Bell, Database, Key, Download, Zap, Keyboard, CheckCircle, Command } from 'lucide-react'
+import { User, Shield, Bell, Database, Key, Download, Zap, Keyboard, CheckCircle, Command, Moon, Sun } from 'lucide-react'
 import Avatar from '../components/ui/Avatar'
 import api from '../api'
 
 export default function Settings() {
   const user = useAuthStore(s => s.user)
+  const { darkMode, toggleDarkMode } = useUIStore()
   const [saved, setSaved] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -174,6 +175,31 @@ export default function Settings() {
               </label>
             </div>
           ))}
+        </div>
+      </Card>
+
+      {/* Appearance */}
+      <Card>
+        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+          <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
+            {darkMode ? <Moon size={16} className="text-gray-600" /> : <Sun size={16} className="text-yellow-500" />}
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900">Appearance</h2>
+            <p className="text-xs text-gray-400">Customize the look and feel</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <div className="text-sm font-medium text-gray-700">Dark Mode</div>
+            <div className="text-xs text-gray-400">Switch between light and dark interface</div>
+          </div>
+          <button
+            onClick={toggleDarkMode}
+            className={`relative inline-flex items-center w-11 h-6 rounded-full transition-colors ${darkMode ? 'bg-blue-600' : 'bg-gray-200'}`}
+          >
+            <span className={`inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform ${darkMode ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
         </div>
       </Card>
 
