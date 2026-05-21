@@ -20,6 +20,7 @@ import timesheetsRoutes from './routes/timesheets'
 import calendarRoutes from './routes/calendar'
 import adminRoutes from './routes/admin'
 import templatesRoutes from './routes/templates'
+import customFieldsRoutes from './routes/custom-fields'
 
 initializeDatabase()
 
@@ -55,6 +56,7 @@ app.use('/api/timesheets', timesheetsRoutes)
 app.use('/api/calendar', calendarRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/templates', templatesRoutes)
+app.use('/api/custom-fields', customFieldsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

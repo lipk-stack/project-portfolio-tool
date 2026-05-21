@@ -16,6 +16,7 @@ import TaskForm from '../components/forms/TaskForm'
 import Avatar from '../components/ui/Avatar'
 import CommentThread from '../components/ui/CommentThread'
 import ImportTasks from '../components/ui/ImportTasks'
+import CustomFields from '../components/ui/CustomFields'
 import { format, parseISO } from 'date-fns'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -644,6 +645,9 @@ export default function ProjectDetail() {
                 ))}
               </div>
             </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <CustomFields entityType="project" entityId={project.id} />
+            </div>
           </div>
         </div>
       )}
@@ -756,8 +760,25 @@ export default function ProjectDetail() {
       )}
 
       {activeTab === 'gantt' && (
-        <div className="h-[calc(100vh-300px)] min-h-[500px]">
-          <GanttChart tasks={tasks} onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }} projectStart={project.start_date} projectEnd={project.end_date} />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-400 inline-block" /> Critical Path</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-orange-400 inline-block" /> High Priority</span>
+            </div>
+            <button
+              onClick={async () => {
+                await reportsApi.criticalPath(project.id)
+                loadProject()
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-red-200 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              <Target size={12} /> Analyze Critical Path
+            </button>
+          </div>
+          <div className="h-[calc(100vh-340px)] min-h-[450px]">
+            <GanttChart tasks={tasks} onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }} projectStart={project.start_date} projectEnd={project.end_date} />
+          </div>
         </div>
       )}
 

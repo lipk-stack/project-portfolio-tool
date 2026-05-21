@@ -92,13 +92,80 @@ router.get('/resource-utilization', authenticate, (_req: Request, res: Response)
 })
 
 router.get('/critical-path/:projectId', authenticate, (req: Request, res: Response) => {
-  const tasks = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND is_critical = 1 ORDER BY start_date ASC').all(req.params.projectId)
+  const tasks = db.prepare(`
+    SELECT t.id, t.name, t.start_date, t.end_date, t.estimated_hours, t.status, t.completion_percent
+    FROM tasks t WHERE t.project_id = ? AND t.parent_id IS NULL
+    ORDER BY t.position ASC
+  `).all(req.params.projectId) as Array<Record<string, any>>
+
   const deps = db.prepare(`
-    SELECT td.* FROM task_dependencies td
-    JOIN tasks t ON t.id = td.predecessor_id
-    WHERE t.project_id = ? AND t.is_critical = 1
-  `).all(req.params.projectId)
-  res.json({ tasks, dependencies: deps })
+    SELECT td.predecessor_id, td.successor_id, td.type, td.lag
+    FROM task_dependencies td
+    JOIN tasks t ON t.id = td.successor_id
+    WHERE t.project_id = ?
+  `).all(req.params.projectId) as Array<{ predecessor_id: number; successor_id: number; type: string; lag: number }>
+
+  if (tasks.length === 0) return res.json({ tasks: [], criticalPath: [], dependencies: deps })
+
+  // Build forward and backward pass for CPM
+  const taskMap: Record<number, Record<string, any>> = {}
+  for (const t of tasks) taskMap[t.id] = { ...t, ES: 0, EF: 0, LS: 0, LF: 0, TF: 0 }
+
+  const succs: Record<number, number[]> = {}
+  const preds: Record<number, number[]> = {}
+  for (const t of tasks) { succs[t.id] = []; preds[t.id] = [] }
+  for (const d of deps) {
+    if (succs[d.predecessor_id]) succs[d.predecessor_id].push(d.successor_id)
+    if (preds[d.successor_id]) preds[d.successor_id].push(d.predecessor_id)
+  }
+
+  const duration = (t: Record<string, any>) => {
+    if (t.start_date && t.end_date) {
+      return Math.max(1, Math.ceil((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 86400000))
+    }
+    return Math.max(1, Math.round((t.estimated_hours || 8) / 8))
+  }
+
+  // Forward pass
+  const topo = [...tasks.map(t => t.id)]
+  for (const id of topo) {
+    const t = taskMap[id]
+    const dur = duration(t)
+    const maxPredEF = preds[id].reduce((max, pid) => Math.max(max, taskMap[pid]?.EF || 0), 0)
+    t.ES = maxPredEF
+    t.EF = t.ES + dur
+  }
+
+  const projectEnd = Math.max(...tasks.map(t => taskMap[t.id].EF))
+
+  // Backward pass
+  for (const id of [...topo].reverse()) {
+    const t = taskMap[id]
+    const dur = duration(t)
+    const minSuccLS = succs[id].length > 0
+      ? succs[id].reduce((min, sid) => Math.min(min, taskMap[sid]?.LS ?? projectEnd), projectEnd)
+      : projectEnd
+    t.LF = minSuccLS
+    t.LS = t.LF - dur
+    t.TF = t.LS - t.ES
+  }
+
+  const criticalIds = tasks.filter(t => taskMap[t.id].TF === 0).map(t => t.id)
+
+  // Update is_critical in DB
+  db.prepare('UPDATE tasks SET is_critical = 0 WHERE project_id = ?').run(req.params.projectId)
+  if (criticalIds.length > 0) {
+    const placeholders = criticalIds.map(() => '?').join(',')
+    db.prepare(`UPDATE tasks SET is_critical = 1 WHERE id IN (${placeholders})`).run(...criticalIds)
+  }
+
+  const enrichedTasks = tasks.map(t => ({
+    ...t,
+    ...taskMap[t.id],
+    is_critical: criticalIds.includes(t.id) ? 1 : 0,
+  }))
+
+  res.json({ tasks: enrichedTasks, criticalPath: criticalIds, dependencies: deps })
 })
 
 router.get('/evm/:projectId', authenticate, (req: Request, res: Response) => {
