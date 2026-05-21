@@ -14,6 +14,7 @@ import GanttChart from '../components/gantt/GanttChart'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import Avatar from '../components/ui/Avatar'
+import CommentThread from '../components/ui/CommentThread'
 import { format, parseISO } from 'date-fns'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -476,6 +477,13 @@ export default function ProjectDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.open(`/print/project/${project.id}`, '_blank')}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+              title="Export PDF Report"
+            >
+              <Flag size={14} /> Report
+            </button>
             {evm && (
               <div className="hidden md:flex items-center gap-4 bg-gray-50 rounded-xl px-4 py-2 border border-gray-200">
                 <div className="text-center">
@@ -853,30 +861,40 @@ export default function ProjectDetail() {
       )}
 
       {activeTab === 'activity' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Project Activity</h3>
-          </div>
-          {activity.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-400">No activity recorded</div>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {activity.map(item => (
-                <div key={item.id} className="flex items-start gap-3 px-5 py-3">
-                  <Avatar name={item.user_name || 'U'} size="xs" className="mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-700">
-                      <span className="font-medium">{item.user_name}</span>{' '}
-                      {getActivityText(item.action, item.details)}
+        <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-12 lg:col-span-7">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Activity Log</h3>
+              </div>
+              {activity.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-400">No activity recorded</div>
+              ) : (
+                <div className="divide-y divide-gray-50 max-h-[500px] overflow-y-auto">
+                  {activity.map(item => (
+                    <div key={item.id} className="flex items-start gap-3 px-5 py-3">
+                      <Avatar name={item.user_name || 'U'} size="xs" className="mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-700">
+                          <span className="font-medium">{item.user_name}</span>{' '}
+                          {getActivityText(item.action, item.details)}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400 flex-shrink-0">
+                        {format(parseISO(item.created_at), 'MMM d, HH:mm')}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-gray-400 flex-shrink-0">
-                    {format(parseISO(item.created_at), 'MMM d, HH:mm')}
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          </div>
+          <div className="col-span-12 lg:col-span-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="font-semibold text-gray-900 mb-4">Discussion</h3>
+              <CommentThread entityType="project" entityId={project.id} />
+            </div>
+          </div>
         </div>
       )}
 

@@ -118,4 +118,27 @@ router.post('/:id/time', authenticate, (req: Request, res: Response) => {
   res.status(201).json({ entry })
 })
 
+router.get('/:id/comments', authenticate, (req: Request, res: Response) => {
+  const comments = db.prepare(`
+    SELECT c.*, u.name as author_name FROM comments c
+    LEFT JOIN users u ON u.id = c.user_id
+    WHERE c.entity_type = 'task' AND c.entity_id = ?
+    ORDER BY c.created_at ASC
+  `).all(req.params.id)
+  res.json({ comments })
+})
+
+router.post('/:id/comments', authenticate, (req: Request, res: Response) => {
+  const { content } = req.body
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' })
+  const result = db.prepare('INSERT INTO comments (entity_type, entity_id, user_id, content) VALUES (?, ?, ?, ?)').run('task', req.params.id, req.user!.userId, content.trim())
+  const comment = db.prepare('SELECT c.*, u.name as author_name FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(result.lastInsertRowid)
+  res.status(201).json({ comment })
+})
+
+router.delete('/:taskId/comments/:commentId', authenticate, (req: Request, res: Response) => {
+  db.prepare('DELETE FROM comments WHERE id = ? AND user_id = ?').run(req.params.commentId, req.user!.userId)
+  res.json({ success: true })
+})
+
 export default router

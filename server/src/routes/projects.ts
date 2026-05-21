@@ -162,4 +162,23 @@ router.get('/:id/activity', authenticate, (req: Request, res: Response) => {
   res.json({ activity })
 })
 
+router.get('/:id/comments', authenticate, (req: Request, res: Response) => {
+  const comments = db.prepare(`
+    SELECT c.*, u.name as author_name FROM comments c
+    LEFT JOIN users u ON u.id = c.user_id
+    WHERE c.entity_type = 'project' AND c.entity_id = ?
+    ORDER BY c.created_at ASC
+  `).all(req.params.id)
+  res.json({ comments })
+})
+
+router.post('/:id/comments', authenticate, (req: Request, res: Response) => {
+  const { content } = req.body
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' })
+  const result = db.prepare('INSERT INTO comments (entity_type, entity_id, user_id, content) VALUES (?, ?, ?, ?)').run('project', req.params.id, req.user!.userId, content.trim())
+  const comment = db.prepare('SELECT c.*, u.name as author_name FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(result.lastInsertRowid)
+  db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', req.params.id, req.user!.userId, 'comment_added', JSON.stringify({ message: (content as string).slice(0, 80) }))
+  res.status(201).json({ comment })
+})
+
 export default router

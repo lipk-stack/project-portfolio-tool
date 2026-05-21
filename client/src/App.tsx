@@ -13,6 +13,7 @@ import Timeline from './pages/Timeline'
 import Timesheets from './pages/Timesheets'
 import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
+import PrintReport from './pages/PrintReport'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -25,6 +26,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/print/project/:id" element={<ProtectedRoute><PrintReport /></ProtectedRoute>} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="portfolio" element={<Portfolio />} />
