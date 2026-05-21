@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
 import { reportsApi, projectsApi } from '../api'
+import api from '../api'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
 import { BarChart2, TrendingUp, CheckCircle, AlertCircle, Target, DollarSign, Sparkles, AlertTriangle, Clock, Shield } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, PieChart, Pie, Legend, AreaChart, Area
+  LineChart, Line, PieChart, Pie, Legend, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Label
 } from 'recharts'
+
+interface PortfolioEVMProject {
+  id: number; name: string; color: string; health: string
+  budget: number; spent: number; completion_percent: number
+  cpi: number; spi: number; vac: number
+}
 
 interface ReportData {
   projectsByStatus: Array<{ status: string; count: number }>
@@ -49,6 +56,7 @@ export default function Reports() {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState<number | null>(null)
   const [burndownData, setBurndownData] = useState<Array<{ date: string; ideal: number; actual: number | null }> | null>(null)
+  const [portfolioEVM, setPortfolioEVM] = useState<PortfolioEVMProject[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -56,14 +64,14 @@ export default function Reports() {
       reportsApi.overview(),
       reportsApi.insights(),
       projectsApi.list({ status: 'active' }),
-    ]).then(([overviewRes, insightRes, projRes]) => {
+      api.get('/reports/portfolio-evm'),
+    ]).then(([overviewRes, insightRes, projRes, evmRes]) => {
       setData(overviewRes.data)
       setInsights(insightRes.data.insights)
       const activeProjects = projRes.data.projects
       setProjects(activeProjects)
-      if (activeProjects.length > 0) {
-        setSelectedProject(activeProjects[0].id)
-      }
+      if (activeProjects.length > 0) setSelectedProject(activeProjects[0].id)
+      setPortfolioEVM(evmRes.data.projects)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -247,6 +255,83 @@ export default function Reports() {
           </Card>
         </div>
       </div>
+
+      {/* Portfolio EVM Scatter */}
+      {portfolioEVM.length > 0 && (
+        <Card>
+          <div className="flex items-start justify-between mb-1">
+            <div>
+              <h3 className="font-semibold text-gray-900">Portfolio CPI vs SPI Matrix</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Cost Performance Index vs Schedule Performance Index — ideal: both ≥ 1.0</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-12 gap-5 mt-4">
+            <div className="col-span-12 lg:col-span-8">
+              <ResponsiveContainer width="100%" height={280}>
+                <ScatterChart margin={{ left: 20, right: 20, top: 10, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" dataKey="spi" name="SPI" domain={[0, 'auto']} tick={{ fontSize: 11 }} label={{ value: 'SPI (Schedule)', position: 'insideBottom', offset: -10, style: { fontSize: 11, fill: '#9ca3af' } }} />
+                  <YAxis type="number" dataKey="cpi" name="CPI" domain={[0, 'auto']} tick={{ fontSize: 11 }} label={{ value: 'CPI (Cost)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#9ca3af' } }} />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ payload }) => {
+                    if (!payload?.length) return null
+                    const d = payload[0].payload as PortfolioEVMProject
+                    return (
+                      <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-lg text-xs">
+                        <div className="font-semibold text-gray-900 mb-1">{d.name}</div>
+                        <div className="space-y-0.5">
+                          <div>CPI: <span className={d.cpi >= 1 ? 'text-green-600' : 'text-red-600'}>{d.cpi}</span></div>
+                          <div>SPI: <span className={d.spi >= 1 ? 'text-green-600' : 'text-red-600'}>{d.spi}</span></div>
+                          <div>Completion: {d.completion_percent}%</div>
+                          <div>Budget: ${(d.budget / 1000).toFixed(0)}K</div>
+                        </div>
+                      </div>
+                    )
+                  }} />
+                  <ReferenceLine x={1} stroke="#9ca3af" strokeDasharray="4 4" />
+                  <ReferenceLine y={1} stroke="#9ca3af" strokeDasharray="4 4" />
+                  <Scatter
+                    data={portfolioEVM.map(p => ({ ...p, x: p.spi, y: p.cpi }))}
+                    fill="#3b82f6"
+                  >
+                    {portfolioEVM.map((p, i) => (
+                      <Cell key={i} fill={p.cpi >= 1 && p.spi >= 1 ? '#22c55e' : p.cpi < 0.85 || p.spi < 0.85 ? '#ef4444' : '#f59e0b'} />
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="col-span-12 lg:col-span-4">
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                  {[
+                    { label: 'On Track', desc: 'CPI≥1 & SPI≥1', color: 'bg-green-100 text-green-700', count: portfolioEVM.filter(p => p.cpi >= 1 && p.spi >= 1).length },
+                    { label: 'At Risk', desc: 'CPI or SPI < 1', color: 'bg-yellow-100 text-yellow-700', count: portfolioEVM.filter(p => (p.cpi < 1 || p.spi < 1) && p.cpi >= 0.85 && p.spi >= 0.85).length },
+                    { label: 'Off Track', desc: 'CPI or SPI < 0.85', color: 'bg-red-100 text-red-700', count: portfolioEVM.filter(p => p.cpi < 0.85 || p.spi < 0.85).length },
+                  ].map(s => (
+                    <div key={s.label} className={`p-2 rounded-lg ${s.color} text-center`}>
+                      <div className="font-bold text-lg">{s.count}</div>
+                      <div className="font-semibold">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">All Projects</div>
+                {portfolioEVM.map(p => (
+                  <div key={p.id} className="flex items-center justify-between text-xs py-1 border-b border-gray-50">
+                    <div className="flex items-center gap-1.5 truncate min-w-0">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                      <span className="truncate text-gray-700">{p.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      <span className={`font-medium ${p.cpi >= 1 ? 'text-green-600' : p.cpi >= 0.85 ? 'text-yellow-600' : 'text-red-600'}`}>CPI {p.cpi}</span>
+                      <span className={`font-medium ${p.spi >= 1 ? 'text-green-600' : p.spi >= 0.85 ? 'text-yellow-600' : 'text-red-600'}`}>SPI {p.spi}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Burndown Chart */}
       {projects.length > 0 && (

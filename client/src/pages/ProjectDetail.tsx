@@ -1005,7 +1005,7 @@ export default function ProjectDetail() {
 
       {/* Task modal */}
       <Modal isOpen={showTaskForm} onClose={() => { setShowTaskForm(false); setEditTask(null) }} title={editTask ? 'Edit Task' : 'New Task'} size="md">
-        <TaskForm task={editTask || undefined} defaultStatus={defaultTaskStatus} onSubmit={handleTaskSave} onCancel={() => { setShowTaskForm(false); setEditTask(null) }} loading={savingTask} />
+        <TaskForm task={editTask || undefined} projectId={project.id} defaultStatus={defaultTaskStatus} onSubmit={handleTaskSave} onCancel={() => { setShowTaskForm(false); setEditTask(null) }} loading={savingTask} />
       </Modal>
 
       {/* Risk modal */}

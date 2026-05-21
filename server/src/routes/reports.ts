@@ -281,4 +281,40 @@ router.get('/burndown/:projectId', authenticate, (req: Request, res: Response) =
   res.json({ data, total })
 })
 
+router.get('/portfolio-evm', authenticate, (_req: Request, res: Response) => {
+  const projects = db.prepare(`
+    SELECT id, name, color, budget, spent, completion_percent, start_date, end_date, health
+    FROM projects WHERE status = 'active' AND budget > 0
+  `).all() as Array<Record<string, any>>
+
+  const now = new Date()
+  const data = projects.map(p => {
+    const budget = p.budget || 0
+    const completion = (p.completion_percent || 0) / 100
+    const start = p.start_date ? new Date(p.start_date) : now
+    const end = p.end_date ? new Date(p.end_date) : now
+    const totalDuration = Math.max(1, end.getTime() - start.getTime())
+    const elapsed = Math.min(1, Math.max(0, (now.getTime() - start.getTime()) / totalDuration))
+
+    const pv = budget * elapsed
+    const ev = budget * completion
+    const ac = p.spent || 0
+
+    const cpi = ac > 0 ? ev / ac : 1
+    const spi = pv > 0 ? ev / pv : 1
+    const vac = budget - (ac > 0 ? budget / cpi : budget)
+
+    return {
+      id: p.id, name: p.name, color: p.color, health: p.health,
+      budget, spent: ac, completion_percent: p.completion_percent,
+      cpi: Math.round(cpi * 100) / 100,
+      spi: Math.round(spi * 100) / 100,
+      vac: Math.round(vac),
+      pv: Math.round(pv), ev: Math.round(ev), ac: Math.round(ac),
+    }
+  })
+
+  res.json({ projects: data })
+})
+
 export default router

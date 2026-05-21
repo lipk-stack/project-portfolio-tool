@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Task } from '../../types'
-import { resourcesApi } from '../../api'
+import { resourcesApi, tasksApi } from '../../api'
+import { X, GitBranch } from 'lucide-react'
 
 interface TaskFormProps {
   task?: Partial<Task>
+  projectId?: number
   onSubmit: (data: Partial<Task>) => void
   onCancel: () => void
   loading?: boolean
   defaultStatus?: string
 }
 
-export default function TaskForm({ task, onSubmit, onCancel, loading, defaultStatus }: TaskFormProps) {
+export default function TaskForm({ task, projectId, onSubmit, onCancel, loading, defaultStatus }: TaskFormProps) {
   const [users, setUsers] = useState<Array<{ id: number; name: string }>>([])
+  const [allTasks, setAllTasks] = useState<Array<{ id: number; name: string; status: string }>>([])
+  const [deps, setDeps] = useState<number[]>((task as any)?.dependencies || [])
   const { register, handleSubmit, formState: { errors } } = useForm<Partial<Task>>({
     defaultValues: task || {
       status: (defaultStatus as Task['status']) || 'todo',
@@ -24,10 +28,22 @@ export default function TaskForm({ task, onSubmit, onCancel, loading, defaultSta
 
   useEffect(() => {
     resourcesApi.users().then(r => setUsers(r.data.users)).catch(() => {})
-  }, [])
+    if (projectId) {
+      tasksApi.list(projectId).then(r => {
+        setAllTasks((r.data.tasks as any[]).filter((t: any) => t.id !== task?.id))
+      }).catch(() => {})
+    }
+  }, [projectId])
+
+  const addDep = (id: number) => { if (!deps.includes(id)) setDeps(prev => [...prev, id]) }
+  const removeDep = (id: number) => setDeps(prev => prev.filter(d => d !== id))
+
+  const handleFormSubmit = (data: Partial<Task>) => {
+    onSubmit({ ...data, dependencies: deps } as any)
+  }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Task Name *</label>
         <input {...register('name', { required: 'Name required' })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="What needs to be done?" />
@@ -95,10 +111,43 @@ export default function TaskForm({ task, onSubmit, onCancel, loading, defaultSta
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">WBS Code</label>
-        <input {...register('wbs_code')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 1.2.3" />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">WBS Code</label>
+          <input {...register('wbs_code')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 1.2.3" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Sprint</label>
+          <input {...register('sprint' as any)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Sprint 1" />
+        </div>
       </div>
+
+      {allTasks.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+            <GitBranch size={13} /> Depends On (predecessor tasks)
+          </label>
+          <select onChange={e => { if (e.target.value) addDep(parseInt(e.target.value)) }} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2" value="">
+            <option value="">Add dependency…</option>
+            {allTasks.filter(t => !deps.includes(t.id)).map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {deps.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {deps.map(id => {
+                const t = allTasks.find(t => t.id === id)
+                return t ? (
+                  <span key={id} className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-lg">
+                    {t.name}
+                    <button type="button" onClick={() => removeDep(id)} className="text-blue-400 hover:text-blue-700"><X size={11} /></button>
+                  </span>
+                ) : null
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
