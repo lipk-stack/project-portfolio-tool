@@ -154,6 +154,43 @@ router.post('/:id/clone', authenticate, (req: Request, res: Response) => {
   res.status(201).json({ project: newProject })
 })
 
+// Baseline tracking
+router.get('/:id/baselines', authenticate, (req: Request, res: Response) => {
+  const baselines = db.prepare(`
+    SELECT b.id, b.name, b.created_at, u.name as created_by_name
+    FROM project_baselines b LEFT JOIN users u ON u.id = b.created_by
+    WHERE b.project_id = ? ORDER BY b.created_at DESC
+  `).all(req.params.id)
+  res.json({ baselines })
+})
+
+router.post('/:id/baselines', authenticate, (req: Request, res: Response) => {
+  const { name } = req.body
+  if (!name?.trim()) return res.status(400).json({ error: 'Baseline name required' })
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as Record<string, any> | undefined
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+  const tasks = db.prepare('SELECT id, name, start_date, end_date, estimated_hours, actual_hours, completion_percent, wbs_code, status FROM tasks WHERE project_id = ?').all(req.params.id)
+  const milestones = db.prepare('SELECT id, name, date, status FROM milestones WHERE project_id = ?').all(req.params.id)
+  const data = JSON.stringify({
+    project: { name: project.name, start_date: project.start_date, end_date: project.end_date, budget: project.budget, spent: project.spent, completion_percent: project.completion_percent },
+    tasks, milestones, snapshotDate: new Date().toISOString(),
+  })
+  const result = db.prepare('INSERT INTO project_baselines (project_id, name, data, created_by) VALUES (?, ?, ?, ?)').run(req.params.id, name.trim(), data, req.user!.userId)
+  const baseline = db.prepare('SELECT b.id, b.name, b.created_at, u.name as created_by_name FROM project_baselines b LEFT JOIN users u ON u.id = b.created_by WHERE b.id = ?').get(result.lastInsertRowid)
+  res.status(201).json({ baseline })
+})
+
+router.get('/:id/baselines/:bid', authenticate, (req: Request, res: Response) => {
+  const baseline = db.prepare('SELECT * FROM project_baselines WHERE id = ? AND project_id = ?').get(req.params.bid, req.params.id) as Record<string, any> | undefined
+  if (!baseline) return res.status(404).json({ error: 'Baseline not found' })
+  res.json({ baseline: { ...baseline, data: JSON.parse(baseline.data as string) } })
+})
+
+router.delete('/:id/baselines/:bid', authenticate, (req: Request, res: Response) => {
+  db.prepare('DELETE FROM project_baselines WHERE id = ? AND project_id = ?').run(req.params.bid, req.params.id)
+  res.json({ success: true })
+})
+
 router.get('/:id/members', authenticate, (req: Request, res: Response) => {
   const members = db.prepare(`
     SELECT u.id, u.name, u.email, u.department, u.capacity, pm.role, pm.allocation_percent

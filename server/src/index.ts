@@ -21,6 +21,7 @@ import calendarRoutes from './routes/calendar'
 import adminRoutes from './routes/admin'
 import templatesRoutes from './routes/templates'
 import customFieldsRoutes from './routes/custom-fields'
+import goalsRoutes from './routes/goals'
 
 initializeDatabase()
 
@@ -57,6 +58,7 @@ app.use('/api/calendar', calendarRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/templates', templatesRoutes)
 app.use('/api/custom-fields', customFieldsRoutes)
+app.use('/api/goals', goalsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

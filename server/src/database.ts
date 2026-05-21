@@ -176,6 +176,17 @@ export function initializeDatabase() {
 
   // Migrations for schema evolution
   try { db.exec(`ALTER TABLE users ADD COLUMN active INTEGER DEFAULT 1`) } catch {}
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS project_baselines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      data TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`)
+  } catch {}
+  try { db.exec(`ALTER TABLE tasks ADD COLUMN time_estimate_remaining REAL`) } catch {}
 
   seedDatabase()
 }

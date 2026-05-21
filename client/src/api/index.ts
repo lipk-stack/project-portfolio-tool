@@ -56,6 +56,10 @@ export const projectsApi = {
   updateMilestone: (id: number, mid: number, data: object) => api.put(`/projects/${id}/milestones/${mid}`, data),
   deleteMilestone: (id: number, mid: number) => api.delete(`/projects/${id}/milestones/${mid}`),
   getActivity: (id: number) => api.get(`/projects/${id}/activity`),
+  getBaselines: (id: number) => api.get(`/projects/${id}/baselines`),
+  saveBaseline: (id: number, name: string) => api.post(`/projects/${id}/baselines`, { name }),
+  getBaseline: (id: number, bid: number) => api.get(`/projects/${id}/baselines/${bid}`),
+  deleteBaseline: (id: number, bid: number) => api.delete(`/projects/${id}/baselines/${bid}`),
 }
 
 export const tasksApi = {
@@ -116,6 +120,15 @@ export const timesheetsApi = {
   create: (data: object) => api.post('/timesheets', data),
   update: (id: number, data: object) => api.put(`/timesheets/${id}`, data),
   delete: (id: number) => api.delete(`/timesheets/${id}`),
+}
+
+export const goalsApi = {
+  list: () => api.get('/goals'),
+  create: (data: object) => api.post('/goals', data),
+  update: (id: number, data: object) => api.put(`/goals/${id}`, data),
+  delete: (id: number) => api.delete(`/goals/${id}`),
+  logUpdate: (id: number, value: number, note?: string) => api.post(`/goals/${id}/updates`, { value, note }),
+  getUpdates: (id: number) => api.get(`/goals/${id}/updates`),
 }
 
 export default api

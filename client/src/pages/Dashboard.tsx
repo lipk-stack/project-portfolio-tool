@@ -5,7 +5,7 @@ import {
   Users, Shield, Calendar, Activity, Clock, ArrowRight, Sparkles, Target, Zap,
   LucideIcon
 } from 'lucide-react'
-import { dashboardApi, reportsApi } from '../api'
+import { dashboardApi, reportsApi, goalsApi } from '../api'
 import { DashboardSummary, Milestone, ActivityItem } from '../types'
 import Card from '../components/ui/Card'
 import { HealthDot } from '../components/ui/Badge'
@@ -75,6 +75,7 @@ function getActionText(action: string, details?: string): string {
 export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [insights, setInsights] = useState<Insight[]>([])
+  const [goals, setGoals] = useState<Array<{ id: number; title: string; progress_pct: number; status: string; category: string }>>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -82,9 +83,11 @@ export default function Dashboard() {
     Promise.all([
       dashboardApi.summary(),
       reportsApi.insights(),
-    ]).then(([summaryRes, insightRes]) => {
+      goalsApi.list(),
+    ]).then(([summaryRes, insightRes, goalsRes]) => {
       setData(summaryRes.data)
       setInsights(insightRes.data.insights || [])
+      setGoals(goalsRes.data.goals || [])
     }).finally(() => setLoading(false))
   }, [])
 
@@ -342,8 +345,33 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Goals & OKRs widget */}
+        {goals.length > 0 && (
+          <div className="col-span-12 md:col-span-6">
+            <Card padding="none">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2"><Target size={16} className="text-blue-500" /> Goals & OKRs</h2>
+                <button onClick={() => navigate('/goals')} className="text-xs text-blue-600 hover:text-blue-700">View all →</button>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {goals.filter(g => g.status === 'active').slice(0, 4).map(g => (
+                  <div key={g.id} className="px-5 py-3 hover:bg-gray-50 cursor-pointer" onClick={() => navigate('/goals')}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-700 truncate flex-1 mr-2">{g.title}</span>
+                      <span className={`text-xs font-bold flex-shrink-0 ${g.progress_pct >= 70 ? 'text-green-600' : g.progress_pct >= 40 ? 'text-yellow-600' : 'text-red-500'}`}>{g.progress_pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full">
+                      <div className={`h-1.5 rounded-full ${g.progress_pct >= 70 ? 'bg-green-500' : g.progress_pct >= 40 ? 'bg-yellow-500' : 'bg-red-400'}`} style={{ width: `${Math.min(100, g.progress_pct)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Recent Activity */}
-        <div className="col-span-12">
+        <div className={`col-span-12 ${goals.length > 0 ? 'md:col-span-6' : ''}`}>
           <Card padding="none">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-gray-900 flex items-center gap-2"><Activity size={16} className="text-gray-400" /> Recent Activity</h2>

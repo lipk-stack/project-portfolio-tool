@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign,
   AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, TrendingUp, TrendingDown,
-  Activity, Flag, X, Save, Target, Zap, Shield
+  Activity, Flag, X, Save, Target, Zap, Shield, BookMarked, Heart
 } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, reportsApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
@@ -17,10 +17,10 @@ import Avatar from '../components/ui/Avatar'
 import CommentThread from '../components/ui/CommentThread'
 import ImportTasks from '../components/ui/ImportTasks'
 import CustomFields from '../components/ui/CustomFields'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, differenceInDays } from 'date-fns'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, Legend, AreaChart, Area
+  LineChart, Line, Legend, AreaChart, Area, ReferenceLine
 } from 'recharts'
 
 type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'activity' | 'sprint'
@@ -195,6 +195,146 @@ function RiskMatrix({ risks }: { risks: Risk[] }) {
   )
 }
 
+interface BaselineTaskSnapshot {
+  id: number; name: string; start_date: string | null; end_date: string | null
+  estimated_hours: number; actual_hours: number; completion_percent: number; wbs_code: string | null; status: string
+}
+
+interface BaselineData {
+  project: { name: string; start_date: string; end_date: string; budget: number; spent: number; completion_percent: number }
+  tasks: BaselineTaskSnapshot[]
+  milestones: Array<{ id: number; name: string; date: string; status: string }>
+  snapshotDate: string
+}
+
+function BaselineComparison({ baseline, tasks }: { baseline: BaselineData; tasks: Task[] }) {
+  const taskMap: Record<number, Task> = {}
+  for (const t of tasks) taskMap[t.id] = t
+
+  const rows = baseline.tasks.map(bt => {
+    const cur = taskMap[bt.id]
+    if (!cur) return null
+    const blEnd = bt.end_date ? parseISO(bt.end_date) : null
+    const actEnd = cur.end_date ? parseISO(cur.end_date) : null
+    const endSlip = blEnd && actEnd ? differenceInDays(actEnd, blEnd) : null
+    const hoursVar = (cur.actual_hours || 0) - (bt.estimated_hours || 0)
+    return { name: bt.name, wbs: bt.wbs_code, blEnd: bt.end_date, actEnd: cur.end_date, endSlip, blHours: bt.estimated_hours, actHours: cur.actual_hours || 0, hoursVar, status: cur.status }
+  }).filter(Boolean) as Array<{ name: string; wbs: string | null; blEnd: string | null; actEnd: string | null; endSlip: number | null; blHours: number; actHours: number; hoursVar: number; status: string }>
+
+  const slipData = rows.filter(r => r.endSlip !== null).map(r => ({ name: r.wbs ? `${r.wbs} ${r.name}` : r.name, slip: r.endSlip! }))
+  const avgSlip = slipData.length > 0 ? Math.round(slipData.reduce((s, r) => s + r.slip, 0) / slipData.length) : 0
+  const blBudget = baseline.project.budget
+  const budgetVar = blBudget > 0 ? ((baseline.project.spent - blBudget) / blBudget * 100) : 0
+
+  return (
+    <div className="space-y-4 mt-4 border-t border-gray-100 pt-4">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+          <div className="text-xs text-gray-500 mb-0.5">Avg Schedule Slip</div>
+          <div className={`text-xl font-bold ${avgSlip > 0 ? 'text-red-600' : avgSlip < 0 ? 'text-green-600' : 'text-gray-700'}`}>
+            {avgSlip > 0 ? '+' : ''}{avgSlip}d
+          </div>
+          <div className="text-xs text-gray-400">{avgSlip > 0 ? 'behind baseline' : avgSlip < 0 ? 'ahead of baseline' : 'on track'}</div>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+          <div className="text-xs text-gray-500 mb-0.5">Budget vs Baseline</div>
+          <div className={`text-xl font-bold ${budgetVar > 10 ? 'text-red-600' : budgetVar > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+            {budgetVar >= 0 ? '+' : ''}{budgetVar.toFixed(1)}%
+          </div>
+          <div className="text-xs text-gray-400">BL budget: {baseline.project.budget >= 1000 ? `$${(baseline.project.budget / 1000).toFixed(0)}K` : `$${baseline.project.budget}`}</div>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+          <div className="text-xs text-gray-500 mb-0.5">Completion Delta</div>
+          <div className={`text-xl font-bold ${(baseline.project.completion_percent || 0) > 0 ? 'text-blue-600' : 'text-gray-700'}`}>
+            BL {baseline.project.completion_percent}%
+          </div>
+          <div className="text-xs text-gray-400">at time of snapshot</div>
+        </div>
+      </div>
+
+      {slipData.length > 0 && (
+        <div>
+          <h5 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Schedule Slip by Task</h5>
+          <ResponsiveContainer width="100%" height={Math.max(100, slipData.length * 28)}>
+            <BarChart data={slipData} layout="vertical" margin={{ left: 8, right: 40 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={v => `${v}d`} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} />
+              <Tooltip formatter={(v: number) => [`${v > 0 ? '+' : ''}${v} days`, 'Slip vs baseline']} />
+              <ReferenceLine x={0} stroke="#9ca3af" />
+              <Bar dataKey="slip" radius={[0, 3, 3, 0]}>
+                {slipData.map((d, i) => <Cell key={i} fill={d.slip > 5 ? '#ef4444' : d.slip > 0 ? '#f59e0b' : '#22c55e'} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="text-left font-semibold text-gray-500 pb-2 pr-3">Task</th>
+              <th className="text-center font-semibold text-gray-500 pb-2 px-2">BL End</th>
+              <th className="text-center font-semibold text-gray-500 pb-2 px-2">Current End</th>
+              <th className="text-center font-semibold text-gray-500 pb-2 px-2">Slip</th>
+              <th className="text-center font-semibold text-gray-500 pb-2 px-2">BL Hrs</th>
+              <th className="text-center font-semibold text-gray-500 pb-2 px-2">Act Hrs</th>
+              <th className="text-center font-semibold text-gray-500 pb-2 px-2">Var</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map((r, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="py-1.5 pr-3 font-medium text-gray-700 truncate max-w-xs">{r.wbs && <span className="text-gray-400 mr-1">{r.wbs}</span>}{r.name}</td>
+                <td className="py-1.5 px-2 text-center text-gray-500">{r.blEnd ? format(parseISO(r.blEnd), 'MMM d') : '—'}</td>
+                <td className="py-1.5 px-2 text-center text-gray-500">{r.actEnd ? format(parseISO(r.actEnd), 'MMM d') : '—'}</td>
+                <td className="py-1.5 px-2 text-center">
+                  {r.endSlip !== null ? (
+                    <span className={`font-medium ${r.endSlip > 5 ? 'text-red-600' : r.endSlip > 0 ? 'text-yellow-600' : r.endSlip < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                      {r.endSlip > 0 ? '+' : ''}{r.endSlip}d
+                    </span>
+                  ) : '—'}
+                </td>
+                <td className="py-1.5 px-2 text-center text-gray-500">{r.blHours}h</td>
+                <td className="py-1.5 px-2 text-center text-gray-500">{r.actHours}h</td>
+                <td className="py-1.5 px-2 text-center">
+                  {r.hoursVar !== 0 && (
+                    <span className={`font-medium ${r.hoursVar > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {r.hoursVar > 0 ? '+' : ''}{r.hoursVar}h
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function calcHealthScore(evm: EVMData | null, tasks: Task[], risks: Risk[]): { score: number; factors: Array<{ label: string; pts: number; max: number; color: string }> } {
+  const factors = []
+
+  const cpiScore = evm ? Math.round(Math.min(1, evm.CPI) * 25) : 25
+  factors.push({ label: 'Cost Performance (CPI)', pts: cpiScore, max: 25, color: cpiScore >= 20 ? 'text-green-600' : cpiScore >= 12 ? 'text-yellow-600' : 'text-red-600' })
+
+  const spiScore = evm ? Math.round(Math.min(1, evm.SPI) * 25) : 25
+  factors.push({ label: 'Schedule Performance (SPI)', pts: spiScore, max: 25, color: spiScore >= 20 ? 'text-green-600' : spiScore >= 12 ? 'text-yellow-600' : 'text-red-600' })
+
+  const nonDone = tasks.filter(t => !t.parent_id)
+  const overdue = nonDone.filter(t => t.end_date && parseISO(t.end_date) < new Date() && t.status !== 'done').length
+  const taskScore = nonDone.length > 0 ? Math.round((1 - overdue / nonDone.length) * 25) : 25
+  factors.push({ label: 'On-time Tasks', pts: taskScore, max: 25, color: taskScore >= 20 ? 'text-green-600' : taskScore >= 12 ? 'text-yellow-600' : 'text-red-600' })
+
+  const highRisks = risks.filter(r => r.score >= 6 && r.status !== 'closed').length
+  const riskScore = Math.max(0, 25 - highRisks * 4)
+  factors.push({ label: 'Risk Exposure', pts: riskScore, max: 25, color: riskScore >= 20 ? 'text-green-600' : riskScore >= 12 ? 'text-yellow-600' : 'text-red-600' })
+
+  const score = factors.reduce((s, f) => s + f.pts, 0)
+  return { score, factors }
+}
+
 interface RiskFormData {
   title: string; description: string; category: string; probability: string; impact: string
   status: string; response: string; mitigation_plan: string
@@ -341,16 +481,26 @@ export default function ProjectDetail() {
   const [showMilestoneForm, setShowMilestoneForm] = useState(false)
   const [editMilestone, setEditMilestone] = useState<Milestone | null>(null)
   const [savingMilestone, setSavingMilestone] = useState(false)
+  const [baselines, setBaselines] = useState<Array<{ id: number; name: string; created_at: string; created_by_name: string }>>([])
+  const [selectedBaselineId, setSelectedBaselineId] = useState<number | null>(null)
+  const [baselineData, setBaselineData] = useState<BaselineData | null>(null)
+  const [savingBaseline, setSavingBaseline] = useState(false)
+  const [timeLogTask, setTimeLogTask] = useState<Task | null>(null)
+  const [timeLogHours, setTimeLogHours] = useState('1')
+  const [timeLogDate, setTimeLogDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [timeLogNote, setTimeLogNote] = useState('')
+  const [loggingTime, setLoggingTime] = useState(false)
 
   const loadProject = useCallback(async () => {
     if (!id) return
-    const [projRes, tasksRes, risksRes, budgetRes, activityRes, evmRes] = await Promise.all([
+    const [projRes, tasksRes, risksRes, budgetRes, activityRes, evmRes, baselinesRes] = await Promise.all([
       projectsApi.get(Number(id)),
       tasksApi.list(Number(id)),
       risksApi.list(Number(id)),
       budgetApi.get(Number(id)),
       projectsApi.getActivity(Number(id)),
       reportsApi.evm(Number(id)),
+      projectsApi.getBaselines(Number(id)),
     ])
     setProject(projRes.data.project)
     setTasks(tasksRes.data.tasks)
@@ -361,6 +511,7 @@ export default function ProjectDetail() {
     setTaskStats(projRes.data.taskStats)
     setActivity(activityRes.data.activity)
     setEvm(evmRes.data)
+    setBaselines(baselinesRes.data.baselines)
   }, [id])
 
   useEffect(() => {
@@ -646,6 +797,49 @@ export default function ProjectDetail() {
               </div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
+              {(() => {
+                const { score, factors } = calcHealthScore(evm, tasks, risks)
+                const color = score >= 75 ? 'text-green-600' : score >= 50 ? 'text-yellow-600' : 'text-red-600'
+                const ring = score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'
+                return (
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Heart size={16} className="text-red-400" /> Project Health
+                    </h3>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-16 h-16 flex-shrink-0">
+                        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                          <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3.5" />
+                          <circle cx="18" cy="18" r="15.9" fill="none" stroke={ring} strokeWidth="3.5"
+                            strokeDasharray={`${score} ${100 - score}`} strokeLinecap="round" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className={`text-3xl font-bold ${color}`}>{score}</div>
+                        <div className="text-xs text-gray-400">/100 health score</div>
+                        <div className={`text-xs font-medium mt-0.5 ${color}`}>
+                          {score >= 75 ? 'Healthy' : score >= 50 ? 'At Risk' : 'Critical'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {factors.map(f => (
+                        <div key={f.label}>
+                          <div className="flex justify-between text-xs mb-0.5">
+                            <span className="text-gray-500 truncate">{f.label}</span>
+                            <span className={`font-medium ${f.color}`}>{f.pts}/{f.max}</span>
+                          </div>
+                          <div className="h-1 bg-gray-100 rounded-full">
+                            <div className="h-1 rounded-full transition-all" style={{ width: `${(f.pts / f.max) * 100}%`, backgroundColor: f.pts >= f.max * 0.8 ? '#22c55e' : f.pts >= f.max * 0.5 ? '#f59e0b' : '#ef4444' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
               <CustomFields entityType="project" entityId={project.id} />
             </div>
           </div>
@@ -748,7 +942,10 @@ export default function ProjectDetail() {
                       <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}>{task.end_date ? format(parseISO(task.end_date), 'MMM d') : '—'}</td>
                       <td className="px-4 py-3 w-32 hidden md:table-cell cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}><Progress value={task.completion_percent} size="sm" showLabel /></td>
                       <td className="px-4 py-3">
-                        <button onClick={e => { e.stopPropagation(); handleDeleteTask(task.id) }} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={e => { e.stopPropagation(); setTimeLogTask(task); setTimeLogHours('1'); setTimeLogDate(format(new Date(), 'yyyy-MM-dd')); setTimeLogNote('') }} title="Log time" className="p-1 text-gray-400 hover:text-blue-500 transition-colors"><Clock size={14} /></button>
+                          <button onClick={e => { e.stopPropagation(); handleDeleteTask(task.id) }} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -846,6 +1043,79 @@ export default function ProjectDetail() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Baseline Tracking */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <BookMarked size={16} className="text-blue-500" /> Baseline Tracking
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">Save snapshots to track schedule & budget variance over time</p>
+              </div>
+              <button
+                onClick={async () => {
+                  const name = prompt('Baseline name:', `Baseline ${format(new Date(), 'MMM d, yyyy')}`)
+                  if (name === null) return
+                  setSavingBaseline(true)
+                  try {
+                    await projectsApi.saveBaseline(project.id, name || `Baseline ${format(new Date(), 'MMM d')}`)
+                    await loadProject()
+                  } finally { setSavingBaseline(false) }
+                }}
+                disabled={savingBaseline}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
+              >
+                {savingBaseline ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Plus size={14} />}
+                Save Baseline
+              </button>
+            </div>
+            {baselines.length === 0 ? (
+              <p className="text-sm text-gray-400 italic mt-3">No baselines saved yet. Save a baseline to track changes over time.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedBaselineId || ''}
+                    onChange={async e => {
+                      const bid = Number(e.target.value)
+                      setSelectedBaselineId(bid || null)
+                      if (bid) {
+                        const r = await projectsApi.getBaseline(project.id, bid)
+                        setBaselineData(r.data.baseline.data)
+                      } else {
+                        setBaselineData(null)
+                      }
+                    }}
+                    className="input-field text-sm flex-1"
+                  >
+                    <option value="">Select a baseline to compare…</option>
+                    {baselines.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} — {format(parseISO(b.created_at), 'MMM d, yyyy HH:mm')} by {b.created_by_name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedBaselineId && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Delete this baseline?')) return
+                        await projectsApi.deleteBaseline(project.id, selectedBaselineId)
+                        setSelectedBaselineId(null)
+                        setBaselineData(null)
+                        loadProject()
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-500 rounded-lg border border-gray-200 hover:border-red-200 transition-colors"
+                      title="Delete baseline"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+                {baselineData && <BaselineComparison baseline={baselineData} tasks={tasks} />}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1069,6 +1339,48 @@ export default function ProjectDetail() {
           </div>
         )
       })()}
+
+      <Modal isOpen={!!timeLogTask} onClose={() => setTimeLogTask(null)} title="Log Time" size="sm">
+        {timeLogTask && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-800 font-medium">{timeLogTask.name}</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Hours *</label>
+                <input type="number" min="0.25" max="24" step="0.25" value={timeLogHours} onChange={e => setTimeLogHours(e.target.value)} className="input-field" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Date *</label>
+                <input type="date" value={timeLogDate} onChange={e => setTimeLogDate(e.target.value)} className="input-field" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+              <input value={timeLogNote} onChange={e => setTimeLogNote(e.target.value)} className="input-field" placeholder="What did you work on?" />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={async () => {
+                  const h = parseFloat(timeLogHours)
+                  if (!h || h <= 0) return
+                  setLoggingTime(true)
+                  try {
+                    await tasksApi.logTime(timeLogTask.id, { hours: h, date: timeLogDate, description: timeLogNote })
+                    setTimeLogTask(null)
+                    loadProject()
+                  } finally { setLoggingTime(false) }
+                }}
+                disabled={loggingTime || !timeLogHours || parseFloat(timeLogHours) <= 0}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loggingTime ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Clock size={14} />}
+                Log {timeLogHours}h
+              </button>
+              <button onClick={() => setTimeLogTask(null)} className="px-4 py-2 border border-gray-200 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Import Tasks from CSV" size="lg">
         <ImportTasks projectId={project.id} onDone={() => { setShowImport(false); loadProject() }} onCancel={() => setShowImport(false)} />
