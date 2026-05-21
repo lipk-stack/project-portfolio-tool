@@ -15,6 +15,7 @@ import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import Avatar from '../components/ui/Avatar'
 import CommentThread from '../components/ui/CommentThread'
+import ImportTasks from '../components/ui/ImportTasks'
 import { format, parseISO } from 'date-fns'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -327,6 +328,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [taskView, setTaskView] = useState<'kanban' | 'list'>('kanban')
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [savingTask, setSavingTask] = useState(false)
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus>('todo')
@@ -642,9 +644,14 @@ export default function ProjectDetail() {
                 <List size={14} /> List
               </button>
             </div>
-            <button onClick={() => { setEditTask(null); setShowTaskForm(true) }} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-              <Plus size={14} /> Add Task
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors" title="Import tasks from CSV">
+                <ArrowLeft size={14} className="rotate-90" /> Import CSV
+              </button>
+              <button onClick={() => { setEditTask(null); setShowTaskForm(true) }} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                <Plus size={14} /> Add Task
+              </button>
+            </div>
           </div>
           {taskView === 'kanban' ? (
             <div className="h-[calc(100vh-380px)] min-h-[400px]">
@@ -991,6 +998,10 @@ export default function ProjectDetail() {
           </div>
         )
       })()}
+
+      <Modal isOpen={showImport} onClose={() => setShowImport(false)} title="Import Tasks from CSV" size="lg">
+        <ImportTasks projectId={project.id} onDone={() => { setShowImport(false); loadProject() }} onCancel={() => setShowImport(false)} />
+      </Modal>
 
       {/* Task modal */}
       <Modal isOpen={showTaskForm} onClose={() => { setShowTaskForm(false); setEditTask(null) }} title={editTask ? 'Edit Task' : 'New Task'} size="md">

@@ -2,12 +2,13 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  Zap, CalendarRange, Clock, CalendarDays, Shield
+  Zap, CalendarRange, Clock, CalendarDays, Shield, CheckSquare
 } from 'lucide-react'
 import { useUIStore, useAuthStore } from '../../store'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/my-tasks', label: 'My Tasks', icon: CheckSquare },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/projects', label: 'Projects', icon: FolderOpen },
   { to: '/timeline', label: 'Timeline', icon: CalendarRange },

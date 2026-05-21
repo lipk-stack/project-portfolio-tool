@@ -14,6 +14,7 @@ import Timesheets from './pages/Timesheets'
 import CalendarView from './pages/CalendarView'
 import Admin from './pages/Admin'
 import PrintReport from './pages/PrintReport'
+import MyTasks from './pages/MyTasks'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="resources" element={<Resources />} />
           <Route path="timesheets" element={<Timesheets />} />
           <Route path="calendar" element={<CalendarView />} />
+          <Route path="my-tasks" element={<MyTasks />} />
           <Route path="reports" element={<Reports />} />
           <Route path="admin" element={<Admin />} />
           <Route path="settings" element={<Settings />} />

@@ -4,6 +4,41 @@ import { authenticate } from '../middleware/auth'
 
 const router = Router()
 
+router.get('/mine', authenticate, (req: Request, res: Response) => {
+  const tasks = db.prepare(`
+    SELECT t.*, u.name as assignee_name,
+           p.name as project_name, p.color as project_color, p.id as project_id
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    LEFT JOIN users u ON u.id = t.assignee_id
+    WHERE t.assignee_id = ? AND t.status != 'done' AND p.status = 'active'
+    ORDER BY
+      CASE WHEN t.end_date < date('now') THEN 0
+           WHEN t.end_date = date('now') THEN 1
+           WHEN t.end_date <= date('now', '+7 days') THEN 2
+           ELSE 3 END,
+      t.end_date ASC NULLS LAST, t.priority DESC
+  `).all(req.user!.userId)
+
+  const completed = db.prepare(`
+    SELECT COUNT(*) as count FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.assignee_id = ? AND t.status = 'done' AND t.updated_at >= date('now', '-7 days')
+  `).get(req.user!.userId) as { count: number }
+
+  const today = new Date().toISOString().split('T')[0]
+  const inWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+
+  const grouped = {
+    overdue: (tasks as any[]).filter(t => t.end_date && t.end_date < today),
+    today: (tasks as any[]).filter(t => t.end_date === today),
+    upcoming: (tasks as any[]).filter(t => t.end_date && t.end_date > today && t.end_date <= inWeek),
+    later: (tasks as any[]).filter(t => !t.end_date || t.end_date > inWeek),
+  }
+
+  res.json({ tasks, grouped, completedThisWeek: completed.count })
+})
+
 router.get('/project/:projectId', authenticate, (req: Request, res: Response) => {
   const tasks = db.prepare(`
     SELECT t.*, u.name as assignee_name, u.email as assignee_email,
