@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, Clock, AlertCircle, CheckCircle2, Circle, Pause, ArrowUpCircle, LucideIcon } from 'lucide-react'
+import { Plus, Clock, AlertCircle, CheckCircle2, Circle, Pause, ArrowUpCircle, LucideIcon, Settings2 } from 'lucide-react'
 import { Task, TaskStatus } from '../../types'
 import { PriorityBadge } from '../ui/Badge'
 import Avatar from '../ui/Avatar'
@@ -11,10 +11,13 @@ import { format, parseISO, isPast } from 'date-fns'
 
 interface KanbanProps {
   tasks: Task[]
+  projectId?: number
   onTaskUpdate: (id: number, status: TaskStatus) => void
   onTaskClick: (task: Task) => void
   onAddTask?: (status: TaskStatus) => void
 }
+
+type WipLimits = Record<string, number>
 
 const COLUMNS: { id: TaskStatus; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'todo', label: 'To Do', icon: Circle, color: 'text-gray-400' },
@@ -97,28 +100,63 @@ function TaskCard({ task, onClick, overlay }: { task: Task; onClick: () => void;
 }
 
 function KanbanColumn({
-  column, tasks, onTaskClick, onAddTask
+  column, tasks, onTaskClick, onAddTask, wipLimit, onSetWipLimit
 }: {
   column: typeof COLUMNS[0]
   tasks: Task[]
   onTaskClick: (task: Task) => void
   onAddTask?: () => void
+  wipLimit?: number
+  onSetWipLimit: (limit: number | undefined) => void
 }) {
+  const [editingWip, setEditingWip] = useState(false)
+  const [wipInput, setWipInput] = useState(String(wipLimit || ''))
+  const isOverLimit = wipLimit !== undefined && tasks.length > wipLimit
+  const isAtLimit = wipLimit !== undefined && tasks.length === wipLimit
+
   return (
-    <div className="flex flex-col bg-gray-50 rounded-xl p-3 min-w-[240px] max-w-[280px]">
+    <div className={`flex flex-col rounded-xl p-3 min-w-[240px] max-w-[280px] ${isOverLimit ? 'bg-red-50 ring-2 ring-red-200' : isAtLimit ? 'bg-yellow-50 ring-1 ring-yellow-200' : 'bg-gray-50'}`}>
       {/* Column header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <column.icon size={16} className={column.color} />
           <span className="text-sm font-semibold text-gray-700">{column.label}</span>
-          <span className="text-xs bg-gray-200 text-gray-600 rounded-full px-2 py-0.5 font-medium">{tasks.length}</span>
+          <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${isOverLimit ? 'bg-red-200 text-red-700' : isAtLimit ? 'bg-yellow-200 text-yellow-700' : 'bg-gray-200 text-gray-600'}`}>
+            {tasks.length}{wipLimit ? `/${wipLimit}` : ''}
+          </span>
         </div>
-        {onAddTask && (
-          <button onClick={onAddTask} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors">
-            <Plus size={14} />
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {editingWip ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number" min="1" max="50" value={wipInput}
+                onChange={e => setWipInput(e.target.value)}
+                className="w-12 text-xs border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="∞"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    onSetWipLimit(wipInput ? parseInt(wipInput) : undefined)
+                    setEditingWip(false)
+                  } else if (e.key === 'Escape') setEditingWip(false)
+                }}
+                autoFocus
+              />
+              <button onClick={() => { onSetWipLimit(wipInput ? parseInt(wipInput) : undefined); setEditingWip(false) }} className="text-xs text-blue-600 font-medium">✓</button>
+            </div>
+          ) : (
+            <button onClick={() => { setWipInput(String(wipLimit || '')); setEditingWip(true) }} className="p-1 rounded text-gray-300 hover:text-gray-500 hover:bg-gray-200 transition-colors" title="Set WIP limit">
+              <Settings2 size={12} />
+            </button>
+          )}
+          {onAddTask && (
+            <button onClick={onAddTask} className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors">
+              <Plus size={14} />
+            </button>
+          )}
+        </div>
       </div>
+
+      {wipLimit && <div className={`text-xs mb-2 px-1 font-medium ${isOverLimit ? 'text-red-600' : isAtLimit ? 'text-yellow-600' : 'text-gray-400'}`}>WIP limit: {wipLimit}</div>}
 
       {/* Cards */}
       <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
@@ -137,8 +175,19 @@ function KanbanColumn({
   )
 }
 
-export default function KanbanBoard({ tasks, onTaskUpdate, onTaskClick, onAddTask }: KanbanProps) {
+export default function KanbanBoard({ tasks, projectId, onTaskUpdate, onTaskClick, onAddTask }: KanbanProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null)
+  const [wipLimits, setWipLimits] = useState<WipLimits>(() => {
+    try { return JSON.parse(localStorage.getItem(`kanban-wip-${projectId}`) || '{}') } catch { return {} }
+  })
+
+  const setWipLimit = (status: string, limit: number | undefined) => {
+    const next = { ...wipLimits }
+    if (limit === undefined) delete next[status]
+    else next[status] = limit
+    setWipLimits(next)
+    localStorage.setItem(`kanban-wip-${projectId}`, JSON.stringify(next))
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -185,6 +234,8 @@ export default function KanbanBoard({ tasks, onTaskUpdate, onTaskClick, onAddTas
             tasks={tasksByStatus(col.id)}
             onTaskClick={onTaskClick}
             onAddTask={onAddTask ? () => onAddTask(col.id) : undefined}
+            wipLimit={wipLimits[col.id]}
+            onSetWipLimit={(limit) => setWipLimit(col.id, limit)}
           />
         ))}
       </div>

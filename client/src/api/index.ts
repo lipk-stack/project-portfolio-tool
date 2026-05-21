@@ -62,6 +62,7 @@ export const tasksApi = {
   list: (projectId: number) => api.get(`/tasks/project/${projectId}`),
   create: (projectId: number, data: object) => api.post(`/tasks/project/${projectId}`, data),
   update: (id: number, data: object) => api.put(`/tasks/${id}`, data),
+  bulkUpdate: (ids: number[], data: object) => api.patch('/tasks/bulk', { ids, ...data }),
   delete: (id: number) => api.delete(`/tasks/${id}`),
   addDependency: (id: number, data: object) => api.post(`/tasks/${id}/dependencies`, data),
   removeDependency: (id: number, predecessorId: number) => api.delete(`/tasks/${id}/dependencies/${predecessorId}`),

@@ -4,6 +4,24 @@ import { authenticate } from '../middleware/auth'
 
 const router = Router()
 
+router.patch('/bulk', authenticate, (req: Request, res: Response) => {
+  const { ids, status, priority, assignee_id } = req.body
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' })
+
+  const updates: string[] = []
+  const params: unknown[] = []
+  if (status) { updates.push('status = ?'); params.push(status) }
+  if (priority) { updates.push('priority = ?'); params.push(priority) }
+  if (assignee_id !== undefined) { updates.push('assignee_id = ?'); params.push(assignee_id || null) }
+  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' })
+
+  updates.push('updated_at = CURRENT_TIMESTAMP')
+  const placeholders = ids.map(() => '?').join(',')
+  db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id IN (${placeholders})`).run(...params, ...ids)
+
+  res.json({ updated: ids.length })
+})
+
 router.get('/mine', authenticate, (req: Request, res: Response) => {
   const tasks = db.prepare(`
     SELECT t.*, u.name as assignee_name,

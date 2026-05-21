@@ -332,6 +332,8 @@ export default function ProjectDetail() {
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [savingTask, setSavingTask] = useState(false)
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus>('todo')
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([])
+  const [bulkAction, setBulkAction] = useState('')
   const [showRiskForm, setShowRiskForm] = useState(false)
   const [editRisk, setEditRisk] = useState<Risk | null>(null)
   const [savingRisk, setSavingRisk] = useState(false)
@@ -669,13 +671,43 @@ export default function ProjectDetail() {
           </div>
           {taskView === 'kanban' ? (
             <div className="h-[calc(100vh-380px)] min-h-[400px]">
-              <KanbanBoard tasks={tasks} onTaskUpdate={handleTaskUpdate} onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }} onAddTask={status => { setDefaultTaskStatus(status); setEditTask(null); setShowTaskForm(true) }} />
+              <KanbanBoard tasks={tasks} projectId={project.id} onTaskUpdate={handleTaskUpdate} onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }} onAddTask={status => { setDefaultTaskStatus(status); setEditTask(null); setShowTaskForm(true) }} />
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Bulk action bar */}
+              {selectedTaskIds.length > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border-b border-blue-200">
+                  <span className="text-sm font-medium text-blue-700">{selectedTaskIds.length} selected</span>
+                  <select value={bulkAction} onChange={async e => {
+                    const action = e.target.value
+                    if (!action) return
+                    const [field, val] = action.split(':')
+                    await tasksApi.bulkUpdate(selectedTaskIds, { [field]: val || null })
+                    setBulkAction('')
+                    setSelectedTaskIds([])
+                    loadProject()
+                  }} className="text-sm border border-blue-300 rounded-lg px-2 py-1 focus:outline-none bg-white">
+                    <option value="">Apply action…</option>
+                    <option value="status:todo">→ To Do</option>
+                    <option value="status:in_progress">→ In Progress</option>
+                    <option value="status:review">→ In Review</option>
+                    <option value="status:done">→ Done</option>
+                    <option value="priority:critical">Priority: Critical</option>
+                    <option value="priority:high">Priority: High</option>
+                    <option value="priority:medium">Priority: Medium</option>
+                    <option value="priority:low">Priority: Low</option>
+                  </select>
+                  <button onClick={() => setSelectedTaskIds([])} className="text-xs text-blue-500 hover:text-blue-700 ml-auto">Clear selection</button>
+                </div>
+              )}
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b">
+                    <th className="px-4 py-3 w-8">
+                      <input type="checkbox" className="rounded" checked={selectedTaskIds.length === tasks.filter(t => !t.parent_id).length && tasks.length > 0}
+                        onChange={e => setSelectedTaskIds(e.target.checked ? tasks.filter(t => !t.parent_id).map(t => t.id) : [])} />
+                    </th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Task</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Status</th>
                     <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Assignee</th>
@@ -686,8 +718,12 @@ export default function ProjectDetail() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {tasks.filter(t => !t.parent_id).map(task => (
-                    <tr key={task.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}>
-                      <td className="px-4 py-3">
+                    <tr key={task.id} className={`hover:bg-gray-50 ${selectedTaskIds.includes(task.id) ? 'bg-blue-50' : ''}`}>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" className="rounded" checked={selectedTaskIds.includes(task.id)}
+                          onChange={e => setSelectedTaskIds(prev => e.target.checked ? [...prev, task.id] : prev.filter(id => id !== task.id))} />
+                      </td>
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}>
                         <div className="flex items-center gap-2">
                           {task.is_critical === 1 && <span className="w-1.5 h-4 rounded bg-red-400 flex-shrink-0" />}
                           <div>
@@ -696,8 +732,8 @@ export default function ProjectDetail() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}><StatusBadge status={task.status} /></td>
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}>
                         {task.assignee_name ? (
                           <div className="flex items-center gap-2">
                             <Avatar name={task.assignee_name} size="xs" />
@@ -705,8 +741,8 @@ export default function ProjectDetail() {
                           </div>
                         ) : <span className="text-xs text-gray-400">Unassigned</span>}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{task.end_date ? format(parseISO(task.end_date), 'MMM d') : '—'}</td>
-                      <td className="px-4 py-3 w-32 hidden md:table-cell"><Progress value={task.completion_percent} size="sm" showLabel /></td>
+                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}>{task.end_date ? format(parseISO(task.end_date), 'MMM d') : '—'}</td>
+                      <td className="px-4 py-3 w-32 hidden md:table-cell cursor-pointer" onClick={() => { setEditTask(task); setShowTaskForm(true) }}><Progress value={task.completion_percent} size="sm" showLabel /></td>
                       <td className="px-4 py-3">
                         <button onClick={e => { e.stopPropagation(); handleDeleteTask(task.id) }} className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
                       </td>
