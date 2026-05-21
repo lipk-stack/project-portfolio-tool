@@ -75,6 +75,45 @@ router.get('/users', authenticate, (_req: Request, res: Response) => {
   res.json({ users })
 })
 
+router.get('/workload-heatmap', authenticate, (_req: Request, res: Response) => {
+  const weeks = db.prepare(`
+    WITH RECURSIVE weeks(week_start) AS (
+      SELECT date('now', '-11 weeks', 'weekday 1')
+      UNION ALL
+      SELECT date(week_start, '+7 days')
+      FROM weeks
+      WHERE week_start < date('now')
+    )
+    SELECT week_start FROM weeks
+  `).all() as Array<{ week_start: string }>
+
+  const users = db.prepare(`
+    SELECT u.id, u.name, u.department, u.capacity
+    FROM users u WHERE u.role != 'admin' ORDER BY u.name
+  `).all() as Array<{ id: number; name: string; department: string; capacity: number }>
+
+  const timeData = db.prepare(`
+    SELECT user_id, strftime('%Y-%W', date) as week_key,
+           SUM(hours) as total_hours
+    FROM time_entries
+    WHERE date >= date('now', '-12 weeks')
+    GROUP BY user_id, week_key
+  `).all() as Array<{ user_id: number; week_key: string; total_hours: number }>
+
+  const heatmap = users.map(u => {
+    const weeklyData = weeks.map(w => {
+      const weekKey = new Date(w.week_start).toLocaleDateString('en-US', { year: 'numeric', week: 'numeric' } as any)
+      const entry = timeData.find(t => t.user_id === u.id)
+      const hours = entry?.total_hours || 0
+      const utilPct = u.capacity > 0 ? Math.round((hours / (u.capacity / 5)) * 100) : 0
+      return { week: w.week_start, hours, utilPct }
+    })
+    return { ...u, weeks: weeklyData }
+  })
+
+  res.json({ heatmap, weeks: weeks.map(w => w.week_start) })
+})
+
 router.get('/users/:id', authenticate, (req: Request, res: Response) => {
   const user = db.prepare('SELECT id, name, email, role, department, capacity, hourly_rate FROM users WHERE id = ?').get(req.params.id)
   if (!user) return res.status(404).json({ error: 'User not found' })

@@ -1,25 +1,55 @@
 import { useEffect, useState } from 'react'
 import { resourcesApi } from '../api'
+import api from '../api'
 import { ResourceSummary } from '../types'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
 import Avatar from '../components/ui/Avatar'
-import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis } from 'recharts'
+import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon, Activity } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { format, parseISO } from 'date-fns'
+
+type ViewType = 'overview' | 'matrix' | 'heatmap'
+
+interface HeatmapUser {
+  id: number; name: string; department: string; capacity: number
+  weeks: Array<{ week: string; hours: number; utilPct: number }>
+}
+
+function HeatCell({ utilPct, hours }: { utilPct: number; hours: number }) {
+  const bg = utilPct === 0 ? 'bg-gray-100'
+    : utilPct < 50 ? 'bg-blue-100'
+    : utilPct < 80 ? 'bg-green-200'
+    : utilPct < 100 ? 'bg-yellow-300'
+    : utilPct < 120 ? 'bg-orange-400'
+    : 'bg-red-500'
+  const text = utilPct >= 100 ? 'text-white' : 'text-gray-700'
+  return (
+    <div
+      className={`w-10 h-8 rounded flex items-center justify-center text-xs font-medium ${bg} ${text} cursor-default`}
+      title={`${hours}h logged (${utilPct}% utilization)`}
+    >
+      {hours > 0 ? `${hours}` : ''}
+    </div>
+  )
+}
 
 export default function Resources() {
   const [resources, setResources] = useState<ResourceSummary[]>([])
   const [matrix, setMatrix] = useState<{ users: Array<{ id: number; name: string; department: string }>; projects: Array<{ id: number; name: string; color: string }>; matrix: Array<{ user_id: number; project_id: number; allocation_percent: number | null }> } | null>(null)
+  const [heatmapData, setHeatmapData] = useState<{ heatmap: HeatmapUser[]; weeks: string[] } | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeView, setActiveView] = useState<'overview' | 'matrix'>('overview')
+  const [activeView, setActiveView] = useState<ViewType>('overview')
 
   useEffect(() => {
     Promise.all([
       resourcesApi.list(),
       resourcesApi.allocationMatrix(),
-    ]).then(([rRes, mRes]) => {
+      api.get('/resources/workload-heatmap'),
+    ]).then(([rRes, mRes, heatRes]) => {
       setResources(rRes.data.resources)
       setMatrix(mRes.data)
+      setHeatmapData(heatRes.data)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -47,6 +77,12 @@ export default function Resources() {
     headcount: d.count,
   }))
 
+  const views: Array<{ id: ViewType; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'matrix', label: 'Allocation Matrix' },
+    { id: 'heatmap', label: 'Workload Heatmap' },
+  ]
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -54,9 +90,15 @@ export default function Resources() {
           <h1 className="text-2xl font-bold text-gray-900">Resource Management</h1>
           <p className="text-sm text-gray-500 mt-0.5">{resources.length} team members · avg {avgUtilization}% utilization</p>
         </div>
-        <div className="flex items-center gap-2">
-          {(['overview', 'matrix'] as const).map(v => (
-            <button key={v} onClick={() => setActiveView(v)} className={`px-3 py-1.5 text-sm rounded-lg capitalize border transition-colors ${activeView === v ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{v}</button>
+        <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden">
+          {views.map(v => (
+            <button
+              key={v.id}
+              onClick={() => setActiveView(v.id)}
+              className={`px-3 py-2 text-sm transition-colors ${activeView === v.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              {v.label}
+            </button>
           ))}
         </div>
       </div>
@@ -98,9 +140,12 @@ export default function Resources() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="flex items-center gap-4 mt-2 text-xs">
-                  {[['#22c55e', 'Optimal (80-100%)'], ['#3b82f6', 'Available (<80%)'], ['#ef4444', 'Over capacity (>100%)']].map(([c, l]) => (
-                    <div key={l} className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} /><span className="text-gray-500">{l}</span></div>
+                <div className="flex items-center gap-4 mt-2 text-xs flex-wrap">
+                  {[['#22c55e', 'Optimal (80-100%)'], ['#3b82f6', 'Available (<80%)'], ['#ef4444', 'Over (>100%)']].map(([c, l]) => (
+                    <div key={l} className="flex items-center gap-1">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                      <span className="text-gray-500">{l}</span>
+                    </div>
                   ))}
                 </div>
               </Card>
@@ -112,7 +157,7 @@ export default function Resources() {
                 <div className="px-5 py-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900">Team Allocation</h3>
                 </div>
-                <div className="divide-y divide-gray-50 max-h-[380px] overflow-y-auto">
+                <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto">
                   {resources.map(r => (
                     <div key={r.id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors">
                       <Avatar name={r.name} size="sm" />
@@ -125,10 +170,10 @@ export default function Resources() {
                           <span className={`text-sm font-bold ${r.total_allocation > 100 ? 'text-red-500' : r.total_allocation < 50 ? 'text-yellow-600' : 'text-green-600'}`}>{r.total_allocation}%</span>
                         </div>
                         <Progress value={r.total_allocation} max={100} size="sm" color={r.total_allocation > 100 ? 'red' : r.total_allocation > 80 ? 'green' : 'blue'} />
-                        <div className="flex gap-1 mt-1 flex-wrap">
+                        <div className="flex gap-1 mt-1.5 flex-wrap">
                           {r.projects?.filter(p => p.status === 'active').map(p => (
-                            <span key={p.project_id} className="text-xs px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: p.color }}>
-                              {p.project_name.length > 12 ? p.project_name.slice(0, 12) + '…' : p.project_name} ({p.allocation_percent}%)
+                            <span key={p.project_id} className="text-xs px-1.5 py-0.5 rounded-md text-white" style={{ backgroundColor: p.color }}>
+                              {p.project_name.length > 10 ? p.project_name.slice(0, 10) + '…' : p.project_name} ({p.allocation_percent}%)
                             </span>
                           ))}
                         </div>
@@ -146,7 +191,7 @@ export default function Resources() {
         <Card padding="none">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-semibold text-gray-900">Allocation Matrix</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Shows % allocation of each team member across active projects</p>
+            <p className="text-xs text-gray-400 mt-0.5">% allocation of each team member across active projects</p>
           </div>
           <div className="overflow-auto">
             <table className="w-full">
@@ -161,6 +206,7 @@ export default function Resources() {
                       </div>
                     </th>
                   ))}
+                  <th className="text-center text-xs font-semibold text-gray-500 px-3 py-3 min-w-[80px]">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -193,11 +239,67 @@ export default function Resources() {
                           </td>
                         )
                       })}
+                      <td className="px-3 py-3 text-center">
+                        <span className={`text-sm font-bold ${total > 100 ? 'text-red-600' : total > 80 ? 'text-green-600' : 'text-gray-600'}`}>{total}%</span>
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
+          </div>
+        </Card>
+      )}
+
+      {activeView === 'heatmap' && heatmapData && (
+        <Card padding="none">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Activity size={16} className="text-gray-400" /> Workload Heatmap</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Hours logged per week (last 12 weeks)</p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                {[['bg-gray-100', '0h'], ['bg-blue-100', 'Low'], ['bg-green-200', 'Optimal'], ['bg-yellow-300', 'High'], ['bg-red-500 text-white', 'Over']].map(([cls, label]) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <div className={`w-4 h-3 rounded ${cls.split(' ')[0]}`} />
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="overflow-auto">
+            <div className="min-w-max">
+              {/* Week headers */}
+              <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100">
+                <div className="w-44 flex-shrink-0 text-xs font-semibold text-gray-400">Team Member</div>
+                {heatmapData.weeks.map(w => (
+                  <div key={w} className="w-10 flex-shrink-0 text-xs text-gray-400 text-center">
+                    {format(parseISO(w), 'M/d')}
+                  </div>
+                ))}
+              </div>
+              {/* Rows */}
+              <div className="divide-y divide-gray-50">
+                {heatmapData.heatmap.map(user => (
+                  <div key={user.id} className="flex items-center gap-1 px-4 py-2 hover:bg-gray-50">
+                    <div className="w-44 flex-shrink-0 flex items-center gap-2">
+                      <Avatar name={user.name} size="xs" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-gray-800 truncate">{user.name}</div>
+                        <div className="text-xs text-gray-400 truncate">{user.department}</div>
+                      </div>
+                    </div>
+                    {user.weeks.map((w, i) => (
+                      <div key={i} className="flex-shrink-0">
+                        <HeatCell utilPct={w.utilPct} hours={w.hours} />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Card>
       )}
