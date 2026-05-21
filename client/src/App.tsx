@@ -16,6 +16,8 @@ import Admin from './pages/Admin'
 import PrintReport from './pages/PrintReport'
 import MyTasks from './pages/MyTasks'
 import Goals from './pages/Goals'
+import ProjectRequests from './pages/ProjectRequests'
+import RequestProject from './pages/RequestProject'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -28,6 +30,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/request-project" element={<RequestProject />} />
         <Route path="/print/project/:id" element={<ProtectedRoute><PrintReport /></ProtectedRoute>} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
@@ -41,6 +44,7 @@ export default function App() {
           <Route path="calendar" element={<CalendarView />} />
           <Route path="my-tasks" element={<MyTasks />} />
           <Route path="goals" element={<Goals />} />
+          <Route path="requests" element={<ProjectRequests />} />
           <Route path="reports" element={<Reports />} />
           <Route path="admin" element={<Admin />} />
           <Route path="settings" element={<Settings />} />

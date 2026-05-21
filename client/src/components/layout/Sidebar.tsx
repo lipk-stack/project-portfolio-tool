@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  Zap, CalendarRange, Clock, CalendarDays, Shield, CheckSquare, Target
+  Zap, CalendarRange, Clock, CalendarDays, Shield, CheckSquare, Target, Inbox
 } from 'lucide-react'
 import { useUIStore, useAuthStore } from '../../store'
 
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/timeline', label: 'Timeline', icon: CalendarRange },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/goals', label: 'Goals & OKRs', icon: Target },
+  { to: '/requests', label: 'Intake Queue', icon: Inbox },
   { to: '/resources', label: 'Resources', icon: Users },
   { to: '/timesheets', label: 'Timesheets', icon: Clock },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
