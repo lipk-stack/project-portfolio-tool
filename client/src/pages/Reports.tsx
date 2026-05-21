@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { reportsApi } from '../api'
+import { reportsApi, projectsApi } from '../api'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
-import { BarChart2, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react'
+import { BarChart2, TrendingUp, CheckCircle, AlertCircle, Target, DollarSign, Sparkles, AlertTriangle, Clock, Shield } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, PieChart, Pie, Legend, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis
+  LineChart, Line, PieChart, Pie, Legend, AreaChart, Area
 } from 'recharts'
 
 interface ReportData {
@@ -19,6 +19,10 @@ interface ReportData {
   avgProjectCompletion: number
 }
 
+interface Insight { type: string; severity: string; title: string; detail: string }
+
+interface Project { id: number; name: string; color: string; status: string }
+
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
   if (n >= 1000) return `$${(n / 1000).toFixed(0)}K`
@@ -28,13 +32,45 @@ function formatCurrency(n: number): string {
 const STATUS_COLORS: Record<string, string> = { planning: '#94a3b8', active: '#3b82f6', on_hold: '#f59e0b', completed: '#22c55e', cancelled: '#ef4444' }
 const HEALTH_COLORS: Record<string, string> = { green: '#22c55e', yellow: '#f59e0b', red: '#ef4444' }
 
+const INSIGHT_ICONS: Record<string, React.ElementType> = {
+  budget: DollarSign, schedule: Clock, resource: Target, risk: Shield,
+  milestone: AlertTriangle, health: CheckCircle,
+}
+
+const SEVERITY_STYLE: Record<string, { bg: string; text: string; border: string }> = {
+  critical: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+  warning: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+  info: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+}
+
 export default function Reports() {
   const [data, setData] = useState<ReportData | null>(null)
+  const [insights, setInsights] = useState<Insight[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProject, setSelectedProject] = useState<number | null>(null)
+  const [burndownData, setBurndownData] = useState<Array<{ date: string; ideal: number; actual: number | null }> | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    reportsApi.overview().then(r => setData(r.data)).finally(() => setLoading(false))
+    Promise.all([
+      reportsApi.overview(),
+      reportsApi.insights(),
+      projectsApi.list({ status: 'active' }),
+    ]).then(([overviewRes, insightRes, projRes]) => {
+      setData(overviewRes.data)
+      setInsights(insightRes.data.insights)
+      const activeProjects = projRes.data.projects
+      setProjects(activeProjects)
+      if (activeProjects.length > 0) {
+        setSelectedProject(activeProjects[0].id)
+      }
+    }).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!selectedProject) return
+    reportsApi.burndown(selectedProject).then(r => setBurndownData(r.data.data))
+  }, [selectedProject])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -44,11 +80,14 @@ export default function Reports() {
 
   if (!data) return null
 
+  const criticalInsights = insights.filter(i => i.severity === 'critical')
+  const warningInsights = insights.filter(i => i.severity === 'warning')
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Portfolio-wide performance metrics</p>
+        <p className="text-sm text-gray-500 mt-0.5">Portfolio-wide performance metrics and insights</p>
       </div>
 
       {/* Summary KPIs */}
@@ -71,13 +110,45 @@ export default function Reports() {
         ))}
       </div>
 
+      {/* Smart Insights */}
+      {insights.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles size={16} className="text-blue-500" />
+            <h3 className="font-semibold text-gray-900">Smart Insights & Recommendations</h3>
+            <div className="ml-auto flex items-center gap-2">
+              {criticalInsights.length > 0 && <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">{criticalInsights.length} critical</span>}
+              {warningInsights.length > 0 && <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-medium">{warningInsights.length} warnings</span>}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {insights.map((insight, i) => {
+              const style = SEVERITY_STYLE[insight.severity] || SEVERITY_STYLE.info
+              const IIcon = INSIGHT_ICONS[insight.type] || AlertTriangle
+              return (
+                <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${style.bg} ${style.border}`}>
+                  <div className={`w-8 h-8 rounded-lg ${style.bg} border ${style.border} flex items-center justify-center flex-shrink-0`}>
+                    <IIcon size={15} className={style.text} />
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${style.text}`}>{insight.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{insight.detail}</p>
+                    <span className={`text-xs font-medium capitalize mt-1 inline-block px-1.5 py-0.5 rounded ${style.bg} ${style.text}`}>{insight.severity} · {insight.type}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Row 1: Budget Performance + Health */}
       <div className="grid grid-cols-12 gap-5">
         <div className="col-span-12 lg:col-span-8">
           <Card>
             <h3 className="font-semibold text-gray-900 mb-1">Budget Performance by Project</h3>
-            <p className="text-xs text-gray-400 mb-4">Spend rate vs. planned budget</p>
-            <ResponsiveContainer width="100%" height={240}>
+            <p className="text-xs text-gray-400 mb-4">Spend rate vs. completion percentage — over 100% means budget overrun</p>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={data.budgetPerformance} margin={{ left: 10, right: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
@@ -94,28 +165,33 @@ export default function Reports() {
         </div>
         <div className="col-span-12 lg:col-span-4 space-y-5">
           <Card>
-            <h3 className="font-semibold text-gray-900 mb-4">Project Health</h3>
+            <h3 className="font-semibold text-gray-900 mb-4">Project Health Distribution</h3>
             <ResponsiveContainer width="100%" height={140}>
               <PieChart>
-                <Pie data={data.projectsByHealth.map(d => ({ ...d, color: HEALTH_COLORS[d.health] }))} cx="50%" cy="50%" outerRadius={60} dataKey="count">
+                <Pie data={data.projectsByHealth.map(d => ({ ...d, color: HEALTH_COLORS[d.health] }))} cx="50%" cy="50%" outerRadius={60} dataKey="count" startAngle={90} endAngle={-270}>
                   {data.projectsByHealth.map((d, i) => <Cell key={i} fill={HEALTH_COLORS[d.health]} />)}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
-            <div className="space-y-1">
+            <div className="space-y-1.5 mt-2">
               {data.projectsByHealth.map(d => (
                 <div key={d.health} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: HEALTH_COLORS[d.health] }} />
-                    <span className="text-xs text-gray-600 capitalize">{d.health === 'green' ? 'On Track' : d.health === 'yellow' ? 'At Risk' : 'Off Track'}</span>
+                    <span className="text-xs text-gray-600">{d.health === 'green' ? 'On Track' : d.health === 'yellow' ? 'At Risk' : 'Off Track'}</span>
                   </div>
-                  <span className="text-xs font-bold text-gray-900">{d.count}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-900">{d.count}</span>
+                    <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ backgroundColor: HEALTH_COLORS[d.health], width: `${(d.count / data.projectsByHealth.reduce((s, x) => s + x.count, 0)) * 100}%` }} />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           </Card>
           <Card>
-            <h3 className="font-semibold text-gray-900 mb-4">Project Status</h3>
+            <h3 className="font-semibold text-gray-900 mb-3">By Status</h3>
             <div className="space-y-2">
               {data.projectsByStatus.map(d => (
                 <div key={d.status} className="flex items-center justify-between">
@@ -131,7 +207,7 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Task Completion */}
+      {/* Row 2: Task Completion + Hours */}
       <div className="grid grid-cols-12 gap-5">
         <div className="col-span-12 lg:col-span-6">
           <Card>
@@ -153,12 +229,11 @@ export default function Reports() {
             </div>
           </Card>
         </div>
-
         <div className="col-span-12 lg:col-span-6">
           <Card>
             <h3 className="font-semibold text-gray-900 mb-1">Hours Logged (Last 30 Days)</h3>
             <p className="text-xs text-gray-400 mb-4">By project</p>
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={240}>
               <BarChart data={data.hoursLogged} layout="vertical" margin={{ left: 80, right: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} />
@@ -172,6 +247,48 @@ export default function Reports() {
           </Card>
         </div>
       </div>
+
+      {/* Burndown Chart */}
+      {projects.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-gray-900">Project Burndown Chart</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Ideal vs actual remaining tasks over time</p>
+            </div>
+            <select
+              value={selectedProject || ''}
+              onChange={e => setSelectedProject(Number(e.target.value))}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          {burndownData && burndownData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={burndownData}>
+                <defs>
+                  <linearGradient id="idealGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.01} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={Math.floor((burndownData.length - 1) / 6)} />
+                <YAxis tick={{ fontSize: 11 }} label={{ value: 'Tasks Remaining', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }} />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="ideal" name="Ideal Burndown" stroke="#3b82f6" fill="url(#idealGrad)" strokeWidth={2} strokeDasharray="4 4" />
+                <Line type="monotone" dataKey="actual" name="Actual Remaining" stroke="#ef4444" strokeWidth={2.5} dot={false} connectNulls={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+              No task data available for this project
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Velocity */}
       {data.velocityData.length > 0 && (

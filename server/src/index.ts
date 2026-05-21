@@ -14,6 +14,9 @@ import resourcesRoutes from './routes/resources'
 import risksRoutes from './routes/risks'
 import budgetRoutes from './routes/budget'
 import reportsRoutes from './routes/reports'
+import timelineRoutes from './routes/timeline'
+import searchRoutes from './routes/search'
+import timesheetsRoutes from './routes/timesheets'
 
 initializeDatabase()
 
@@ -43,6 +46,9 @@ app.use('/api/resources', resourcesRoutes)
 app.use('/api/risks', risksRoutes)
 app.use('/api/budget', budgetRoutes)
 app.use('/api/reports', reportsRoutes)
+app.use('/api/timeline', timelineRoutes)
+app.use('/api/search', searchRoutes)
+app.use('/api/timesheets', timesheetsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

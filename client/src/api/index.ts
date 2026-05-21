@@ -95,6 +95,25 @@ export const reportsApi = {
   overview: () => api.get('/reports/overview'),
   resourceUtilization: () => api.get('/reports/resource-utilization'),
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
+  evm: (projectId: number) => api.get(`/reports/evm/${projectId}`),
+  insights: () => api.get('/reports/insights'),
+  burndown: (projectId: number) => api.get(`/reports/burndown/${projectId}`),
+}
+
+export const timelineApi = {
+  all: () => api.get('/timeline'),
+}
+
+export const searchApi = {
+  search: (q: string) => api.get('/search', { params: { q } }),
+}
+
+export const timesheetsApi = {
+  my: (week?: string) => api.get('/timesheets/my', { params: week ? { week } : {} }),
+  team: (week?: string) => api.get('/timesheets/team', { params: week ? { week } : {} }),
+  create: (data: object) => api.post('/timesheets', data),
+  update: (id: number, data: object) => api.put(`/timesheets/${id}`, data),
+  delete: (id: number) => api.delete(`/timesheets/${id}`),
 }
 
 export default api
