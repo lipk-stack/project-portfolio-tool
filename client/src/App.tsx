@@ -11,6 +11,8 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Timeline from './pages/Timeline'
 import Timesheets from './pages/Timesheets'
+import CalendarView from './pages/CalendarView'
+import Admin from './pages/Admin'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -32,7 +34,9 @@ export default function App() {
           <Route path="timeline" element={<Timeline />} />
           <Route path="resources" element={<Resources />} />
           <Route path="timesheets" element={<Timesheets />} />
+          <Route path="calendar" element={<CalendarView />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="admin" element={<Admin />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

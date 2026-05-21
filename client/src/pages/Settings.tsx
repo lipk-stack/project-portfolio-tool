@@ -23,10 +23,15 @@ export default function Settings() {
 
       let csv = ''
       if (type === 'overview') {
-        // Export budget performance
         const headers = 'Project,Budget,Spent,Completion%,Spend Rate%,Health\n'
         const rows = data.budgetPerformance.map((p: any) =>
           `"${p.name}",${p.budget},${p.spent},${p.completion_percent},${p.spend_rate},${p.health}`
+        ).join('\n')
+        csv = headers + rows
+      } else if (type === 'resource-utilization') {
+        const headers = 'Name,Department,Week,Hours,Capacity\n'
+        const rows = data.weekly.map((r: any) =>
+          `"${r.name}","${r.department || ''}","${r.week}",${r.hours},${r.capacity}`
         ).join('\n')
         csv = headers + rows
       }

@@ -2,15 +2,16 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  Zap, CalendarRange, Clock
+  Zap, CalendarRange, Clock, CalendarDays, Shield
 } from 'lucide-react'
-import { useUIStore } from '../../store'
+import { useUIStore, useAuthStore } from '../../store'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/projects', label: 'Projects', icon: FolderOpen },
   { to: '/timeline', label: 'Timeline', icon: CalendarRange },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/resources', label: 'Resources', icon: Users },
   { to: '/timesheets', label: 'Timesheets', icon: Clock },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
@@ -20,6 +21,7 @@ export default function Sidebar() {
   const collapsed = useUIStore(s => s.sidebarCollapsed)
   const toggle = useUIStore(s => s.toggleSidebar)
   const location = useLocation()
+  const user = useAuthStore(s => s.user)
 
   return (
     <aside className={`fixed top-0 left-0 h-full z-30 bg-gray-900 text-white transition-all duration-300 flex flex-col ${collapsed ? 'w-16' : 'w-64'}`}>
@@ -67,6 +69,21 @@ export default function Sidebar() {
 
       {/* Bottom section */}
       <div className="border-t border-gray-700/50 p-2 space-y-0.5">
+        {user?.role === 'admin' && (
+          <NavLink
+            to="/admin"
+            title={collapsed ? 'Admin' : undefined}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              location.pathname === '/admin' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+            }`}
+          >
+            <Shield size={18} className="flex-shrink-0" />
+            {!collapsed && <span>Admin</span>}
+            {collapsed && (
+              <span className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-50 shadow-lg">Admin</span>
+            )}
+          </NavLink>
+        )}
         <NavLink
           to="/settings"
           title={collapsed ? 'Settings' : undefined}

@@ -174,6 +174,9 @@ export function initializeDatabase() {
     );
   `)
 
+  // Migrations for schema evolution
+  try { db.exec(`ALTER TABLE users ADD COLUMN active INTEGER DEFAULT 1`) } catch {}
+
   seedDatabase()
 }
 
