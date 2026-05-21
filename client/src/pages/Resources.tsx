@@ -9,7 +9,12 @@ import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon, Activity } from 'l
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 
-type ViewType = 'overview' | 'matrix' | 'heatmap'
+type ViewType = 'overview' | 'matrix' | 'heatmap' | 'forecast'
+
+interface ForecastUser {
+  id: number; name: string; department: string; capacity: number
+  weeks: Array<{ week: string; demandHours: number; capacity: number; loadPct: number }>
+}
 
 interface HeatmapUser {
   id: number; name: string; department: string; capacity: number
@@ -38,6 +43,7 @@ export default function Resources() {
   const [resources, setResources] = useState<ResourceSummary[]>([])
   const [matrix, setMatrix] = useState<{ users: Array<{ id: number; name: string; department: string }>; projects: Array<{ id: number; name: string; color: string }>; matrix: Array<{ user_id: number; project_id: number; allocation_percent: number | null }> } | null>(null)
   const [heatmapData, setHeatmapData] = useState<{ heatmap: HeatmapUser[]; weeks: string[] } | null>(null)
+  const [forecastData, setForecastData] = useState<{ forecast: ForecastUser[]; weeks: string[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState<ViewType>('overview')
 
@@ -46,10 +52,12 @@ export default function Resources() {
       resourcesApi.list(),
       resourcesApi.allocationMatrix(),
       api.get('/resources/workload-heatmap'),
-    ]).then(([rRes, mRes, heatRes]) => {
+      api.get('/resources/demand-forecast'),
+    ]).then(([rRes, mRes, heatRes, forecastRes]) => {
       setResources(rRes.data.resources)
       setMatrix(mRes.data)
       setHeatmapData(heatRes.data)
+      setForecastData(forecastRes.data)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -81,6 +89,7 @@ export default function Resources() {
     { id: 'overview', label: 'Overview' },
     { id: 'matrix', label: 'Allocation Matrix' },
     { id: 'heatmap', label: 'Workload Heatmap' },
+    { id: 'forecast', label: 'Demand Forecast' },
   ]
 
   return (
@@ -298,6 +307,73 @@ export default function Resources() {
                     ))}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {activeView === 'forecast' && forecastData && (
+        <Card padding="none">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><TrendingUp size={16} className="text-blue-500" /> Resource Demand Forecast</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Projected hours from assigned tasks vs weekly capacity — next 12 weeks</p>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-500">
+                {[['bg-green-200', '<80%'], ['bg-yellow-300', '80-100%'], ['bg-orange-400 text-white', '100-120%'], ['bg-red-500 text-white', '>120%']].map(([cls, label]) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <div className={`w-4 h-3 rounded ${cls.split(' ')[0]}`} />
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="overflow-auto">
+            <div className="min-w-max">
+              {/* Week headers */}
+              <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100 bg-gray-50">
+                <div className="w-44 flex-shrink-0 text-xs font-semibold text-gray-500">Team Member</div>
+                {forecastData.weeks.map(w => (
+                  <div key={w} className="w-12 flex-shrink-0 text-xs text-gray-400 text-center">
+                    {format(parseISO(w), 'M/d')}
+                  </div>
+                ))}
+              </div>
+              {/* Rows */}
+              <div className="divide-y divide-gray-50">
+                {forecastData.forecast.filter(u => u.weeks.some(w => w.demandHours > 0)).map(user => (
+                  <div key={user.id} className="flex items-center gap-1 px-4 py-2 hover:bg-gray-50">
+                    <div className="w-44 flex-shrink-0 flex items-center gap-2">
+                      <Avatar name={user.name} size="xs" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-gray-800 truncate">{user.name}</div>
+                        <div className="text-xs text-gray-400 truncate">{user.capacity}h/wk cap</div>
+                      </div>
+                    </div>
+                    {user.weeks.map((w, i) => {
+                      const bg = w.demandHours === 0 ? 'bg-gray-100 text-gray-400'
+                        : w.loadPct < 80 ? 'bg-green-100 text-green-700'
+                        : w.loadPct < 100 ? 'bg-yellow-200 text-yellow-800'
+                        : w.loadPct < 120 ? 'bg-orange-300 text-orange-900'
+                        : 'bg-red-500 text-white'
+                      return (
+                        <div
+                          key={i}
+                          className={`w-12 h-8 flex-shrink-0 rounded flex items-center justify-center text-xs font-medium ${bg}`}
+                          title={`${w.demandHours}h demand · ${w.loadPct}% load`}
+                        >
+                          {w.demandHours > 0 ? `${w.demandHours}h` : ''}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+                {forecastData.forecast.every(u => u.weeks.every(w => w.demandHours === 0)) && (
+                  <div className="text-center py-8 text-sm text-gray-400">No future task assignments with estimates found</div>
+                )}
               </div>
             </div>
           </div>

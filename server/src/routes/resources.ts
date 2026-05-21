@@ -114,6 +114,63 @@ router.get('/workload-heatmap', authenticate, (_req: Request, res: Response) => 
   res.json({ heatmap, weeks: weeks.map(w => w.week_start) })
 })
 
+router.get('/demand-forecast', authenticate, (_req: Request, res: Response) => {
+  // Build 12 forward weeks
+  const weekStarts: string[] = []
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i * 7)
+    weekStarts.push(d.toISOString().split('T')[0])
+  }
+
+  const users = db.prepare(`SELECT id, name, department, capacity FROM users WHERE role != 'admin' ORDER BY name`).all() as Array<{ id: number; name: string; department: string; capacity: number }>
+
+  // Tasks with future end dates, assigned, not done
+  const tasks = db.prepare(`
+    SELECT t.id, t.assignee_id, t.start_date, t.end_date, t.estimated_hours, t.actual_hours, t.status,
+           p.name as project_name, p.color as project_color
+    FROM tasks t JOIN projects p ON p.id = t.project_id
+    WHERE t.assignee_id IS NOT NULL
+      AND t.status != 'done'
+      AND t.end_date >= date('now')
+      AND p.status = 'active'
+  `).all() as Array<{ id: number; assignee_id: number; start_date: string; end_date: string; estimated_hours: number; actual_hours: number; status: string; project_name: string; project_color: string }>
+
+  const forecast = users.map(u => {
+    const myTasks = tasks.filter(t => t.assignee_id === u.id)
+    const weeks = weekStarts.map(weekStart => {
+      const wEnd = new Date(weekStart)
+      wEnd.setDate(wEnd.getDate() + 6)
+      const wEndStr = wEnd.toISOString().split('T')[0]
+      let demandHours = 0
+      for (const t of myTasks) {
+        const tStart = t.start_date || weekStart
+        const tEnd = t.end_date
+        // Check if task overlaps with this week
+        if (tEnd < weekStart || tStart > wEndStr) continue
+        // Calculate remaining hours and spread across remaining weeks
+        const remaining = Math.max(0, (t.estimated_hours || 0) - (t.actual_hours || 0))
+        const taskStart = new Date(Math.max(new Date(tStart).getTime(), new Date().getTime()))
+        const taskEnd = new Date(tEnd)
+        const totalDays = Math.max(1, Math.ceil((taskEnd.getTime() - taskStart.getTime()) / (1000 * 60 * 60 * 24)))
+        const totalWeeks = Math.ceil(totalDays / 7)
+        const hoursPerWeek = remaining / totalWeeks
+        demandHours += hoursPerWeek
+      }
+      const weeklyCapacity = (u.capacity || 40) / 5 * 5 // Mon-Fri hours (capacity is weekly)
+      const loadPct = weeklyCapacity > 0 ? Math.round((demandHours / weeklyCapacity) * 100) : 0
+      return { week: weekStart, demandHours: Math.round(demandHours * 10) / 10, capacity: weeklyCapacity, loadPct }
+    })
+    return { ...u, weeks }
+  })
+
+  res.json({ forecast, weeks: weekStarts })
+})
+
 router.get('/users/:id', authenticate, (req: Request, res: Response) => {
   const user = db.prepare('SELECT id, name, email, role, department, capacity, hourly_rate FROM users WHERE id = ?').get(req.params.id)
   if (!user) return res.status(404).json({ error: 'User not found' })
