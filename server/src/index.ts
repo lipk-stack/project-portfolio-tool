@@ -19,6 +19,7 @@ import searchRoutes from './routes/search'
 import timesheetsRoutes from './routes/timesheets'
 import calendarRoutes from './routes/calendar'
 import adminRoutes from './routes/admin'
+import templatesRoutes from './routes/templates'
 
 initializeDatabase()
 
@@ -53,6 +54,7 @@ app.use('/api/search', searchRoutes)
 app.use('/api/timesheets', timesheetsRoutes)
 app.use('/api/calendar', calendarRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/templates', templatesRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

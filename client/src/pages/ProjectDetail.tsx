@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign,
   AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, TrendingUp, TrendingDown,
-  Activity, Flag, X, Save, Target
+  Activity, Flag, X, Save, Target, Zap, Shield
 } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, reportsApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
@@ -20,7 +20,7 @@ import {
   LineChart, Line, Legend, AreaChart, Area
 } from 'recharts'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'activity'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'activity' | 'sprint'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -434,6 +434,7 @@ export default function ProjectDetail() {
     { id: 'risks', label: `Risks (${risks.filter(r => r.status !== 'closed').length})`, icon: AlertTriangle },
     { id: 'team', label: 'Team', icon: Users },
     { id: 'activity', label: 'Activity', icon: Activity },
+    { id: 'sprint', label: 'Sprints', icon: Zap },
   ]
 
   const budgetPct = project.budget > 0 ? Math.round((project.spent / project.budget) * 100) : 0
@@ -879,6 +880,100 @@ export default function ProjectDetail() {
         </div>
       )}
 
+      {activeTab === 'sprint' && (() => {
+        const sprintMap: Record<string, { name: string; tasks: typeof tasks }> = {}
+        for (const t of tasks) {
+          const key = t.sprint || '__backlog__'
+          if (!sprintMap[key]) sprintMap[key] = { name: t.sprint || 'Backlog', tasks: [] }
+          sprintMap[key].tasks.push(t)
+        }
+        const sprints = Object.entries(sprintMap).sort(([a], [b]) => {
+          if (a === '__backlog__') return 1
+          if (b === '__backlog__') return -1
+          return a.localeCompare(b)
+        })
+        const velocityData = sprints.filter(([k]) => k !== '__backlog__').map(([, s]) => ({
+          sprint: s.name,
+          total: s.tasks.reduce((sum, t) => sum + (t.story_points || 0), 0),
+          done: s.tasks.filter(t => t.status === 'done').reduce((sum, t) => sum + (t.story_points || 0), 0),
+        }))
+
+        return (
+          <div className="space-y-5">
+            {velocityData.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="font-semibold text-gray-900 mb-4">Velocity Chart (Story Points)</h3>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={velocityData} margin={{ left: 0, right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="sprint" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="Total Points" fill="#dbeafe" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="done" name="Done Points" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {sprints.map(([key, sprint]) => {
+              const totalPts = sprint.tasks.reduce((sum, t) => sum + (t.story_points || 0), 0)
+              const donePts = sprint.tasks.filter(t => t.status === 'done').reduce((sum, t) => sum + (t.story_points || 0), 0)
+              const donePct = totalPts > 0 ? Math.round((donePts / totalPts) * 100) : 0
+              return (
+                <div key={key} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-semibold text-gray-900">{sprint.name}</h3>
+                      <span className="text-xs text-gray-500">{sprint.tasks.length} tasks</span>
+                      {totalPts > 0 && <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">{donePts}/{totalPts} pts</span>}
+                    </div>
+                    {totalPts > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-1.5 bg-gray-200 rounded-full">
+                          <div className="h-1.5 bg-blue-500 rounded-full" style={{ width: `${donePct}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-500">{donePct}%</span>
+                      </div>
+                    )}
+                  </div>
+                  <table className="w-full">
+                    <tbody className="divide-y divide-gray-50">
+                      {sprint.tasks.map(t => (
+                        <tr key={t.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setEditTask(t); setShowTaskForm(true) }}>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              {t.is_critical === 1 && <span className="w-1 h-4 rounded bg-red-400 flex-shrink-0" />}
+                              <span className="text-sm text-gray-800">{t.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 w-28"><StatusBadge status={t.status} /></td>
+                          <td className="px-4 py-2.5 text-xs text-gray-500 w-32">
+                            {t.assignee_name ? (
+                              <div className="flex items-center gap-1.5">
+                                <Avatar name={t.assignee_name} size="xs" />
+                                <span>{t.assignee_name}</span>
+                              </div>
+                            ) : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-right w-20">
+                            {t.story_points != null && (
+                              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{t.story_points} pts</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })}
+            {tasks.length === 0 && (
+              <div className="text-center py-10 text-gray-400 text-sm">No tasks yet — add tasks with sprint names and story points to use this view</div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Task modal */}
       <Modal isOpen={showTaskForm} onClose={() => { setShowTaskForm(false); setEditTask(null) }} title={editTask ? 'Edit Task' : 'New Task'} size="md">
         <TaskForm task={editTask || undefined} defaultStatus={defaultTaskStatus} onSubmit={handleTaskSave} onCancel={() => { setShowTaskForm(false); setEditTask(null) }} loading={savingTask} />
@@ -907,5 +1002,3 @@ export default function ProjectDetail() {
   )
 }
 
-// We need Shield for import
-import { Shield } from 'lucide-react'

@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, LayoutTemplate, X, CheckCircle2 } from 'lucide-react'
 import { projectsApi } from '../api'
+import api from '../api'
 import { Project } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
 import ProjectForm from '../components/forms/ProjectForm'
 import { format, parseISO } from 'date-fns'
+
+interface Template { id: string; name: string; description: string; icon: string; category: string; task_count: number }
 
 const STATUS_OPTIONS = ['', 'planning', 'active', 'on_hold', 'completed', 'cancelled']
 const HEALTH_OPTIONS = ['', 'green', 'yellow', 'red']
@@ -28,6 +31,11 @@ export default function Projects() {
   const [showFilters, setShowFilters] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [newProjectId, setNewProjectId] = useState<number | null>(null)
+  const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null)
+  const [templateApplied, setTemplateApplied] = useState(false)
   const navigate = useNavigate()
 
   const fetchProjects = () => {
@@ -47,10 +55,31 @@ export default function Projects() {
   const handleCreate = async (data: Partial<Project>) => {
     setCreating(true)
     try {
-      await projectsApi.create(data)
+      const res = await projectsApi.create(data)
       setShowCreate(false)
       fetchProjects()
+      setNewProjectId(res.data.project?.id || null)
     } finally { setCreating(false) }
+  }
+
+  const openTemplates = async () => {
+    if (templates.length === 0) {
+      const r = await api.get('/templates')
+      setTemplates(r.data.templates)
+    }
+    setTemplateApplied(false)
+    setShowTemplates(true)
+  }
+
+  const applyTemplate = async (templateId: string) => {
+    if (!newProjectId) return
+    setApplyingTemplate(templateId)
+    try {
+      await api.post(`/templates/apply/${templateId}`, { project_id: newProjectId })
+      setTemplateApplied(true)
+      fetchProjects()
+      setTimeout(() => { setShowTemplates(false); navigate(`/projects/${newProjectId}`) }, 1200)
+    } finally { setApplyingTemplate(null) }
   }
 
   const stats = {
@@ -68,9 +97,14 @@ export default function Projects() {
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
           <p className="text-sm text-gray-500 mt-0.5">{stats.active} active · {stats.onTrack} on track · {stats.atRisk} needs attention</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus size={16} /> New Project
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={openTemplates} className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+            <LayoutTemplate size={16} /> Templates
+          </button>
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={16} /> New Project
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -172,11 +206,63 @@ export default function Projects() {
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New Project" size="lg">
         <ProjectForm onSubmit={handleCreate} onCancel={() => setShowCreate(false)} loading={creating} />
       </Modal>
+
+      {/* Templates modal */}
+      {showTemplates && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTemplates(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Project Templates</h3>
+                <p className="text-sm text-gray-500">
+                  {newProjectId ? 'Select a template to populate your project with tasks, milestones, and risks' : 'Create a project first, then apply a template to it'}
+                </p>
+              </div>
+              <button onClick={() => setShowTemplates(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            {templateApplied ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <CheckCircle2 size={48} className="text-green-500" />
+                <div className="text-lg font-semibold text-gray-900">Template Applied!</div>
+                <p className="text-sm text-gray-500">Redirecting to your project...</p>
+              </div>
+            ) : (
+              <div className="overflow-y-auto p-6">
+                {!newProjectId && (
+                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                    Create a new project first, then come back to apply a template to it.
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  {templates.map(t => (
+                    <div key={t.id} className={`p-4 rounded-xl border-2 transition-all ${newProjectId ? 'border-gray-200 hover:border-blue-400 hover:shadow-md cursor-pointer' : 'border-gray-100 opacity-60 cursor-not-allowed'}`}
+                      onClick={() => newProjectId && applyTemplate(t.id)}>
+                      <div className="text-2xl mb-2">{t.icon}</div>
+                      <div className="font-semibold text-gray-900">{t.name}</div>
+                      <div className="text-xs text-gray-500 mt-1 mb-3">{t.description}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{t.category}</span>
+                        <span className="text-xs text-gray-400">{t.task_count} tasks</span>
+                      </div>
+                      {applyingTemplate === t.id && (
+                        <div className="mt-2 flex items-center gap-2 text-blue-600 text-sm">
+                          <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          Applying...
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Missing import fix
 import { FolderOpen } from 'lucide-react'
 
 function ProjectCard({ project, onClick }: { project: Project; onClick: () => void }) {
