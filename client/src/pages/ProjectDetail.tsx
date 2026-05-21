@@ -974,7 +974,13 @@ export default function ProjectDetail() {
             </button>
           </div>
           <div className="h-[calc(100vh-340px)] min-h-[450px]">
-            <GanttChart tasks={tasks} onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }} projectStart={project.start_date} projectEnd={project.end_date} />
+            <GanttChart
+              tasks={tasks}
+              onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
+              projectStart={project.start_date}
+              projectEnd={project.end_date}
+              baselineTasks={baselineData ? Object.fromEntries(baselineData.tasks.map(t => [t.id, { start_date: t.start_date, end_date: t.end_date }])) : undefined}
+            />
           </div>
         </div>
       )}

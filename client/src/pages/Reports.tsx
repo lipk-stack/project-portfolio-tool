@@ -9,6 +9,11 @@ import {
   LineChart, Line, PieChart, Pie, Legend, AreaChart, Area, ScatterChart, Scatter, ReferenceLine, Label
 } from 'recharts'
 
+interface PortfolioRisk {
+  id: number; title: string; project_name: string; project_color: string; category: string
+  probability: string; impact: string; score: number; status: string; owner_name: string | null
+}
+
 interface PortfolioEVMProject {
   id: number; name: string; color: string; health: string
   budget: number; spent: number; completion_percent: number
@@ -57,6 +62,7 @@ export default function Reports() {
   const [selectedProject, setSelectedProject] = useState<number | null>(null)
   const [burndownData, setBurndownData] = useState<Array<{ date: string; ideal: number; actual: number | null }> | null>(null)
   const [portfolioEVM, setPortfolioEVM] = useState<PortfolioEVMProject[]>([])
+  const [portfolioRisks, setPortfolioRisks] = useState<PortfolioRisk[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -65,13 +71,15 @@ export default function Reports() {
       reportsApi.insights(),
       projectsApi.list({ status: 'active' }),
       api.get('/reports/portfolio-evm'),
-    ]).then(([overviewRes, insightRes, projRes, evmRes]) => {
+      api.get('/risks/portfolio/register'),
+    ]).then(([overviewRes, insightRes, projRes, evmRes, risksRes]) => {
       setData(overviewRes.data)
       setInsights(insightRes.data.insights)
       const activeProjects = projRes.data.projects
       setProjects(activeProjects)
       if (activeProjects.length > 0) setSelectedProject(activeProjects[0].id)
       setPortfolioEVM(evmRes.data.projects)
+      setPortfolioRisks(risksRes.data.risks)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -395,6 +403,58 @@ export default function Reports() {
               <Area type="monotone" dataKey="points_completed" name="Story Points" stroke="#3b82f6" fill="url(#velocityGrad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* Portfolio Risk Register */}
+      {portfolioRisks.length > 0 && (
+        <Card padding="none">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Shield size={15} className="text-orange-500" /> Portfolio Risk Register</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Open risks across all active projects — sorted by score</p>
+            </div>
+            <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full font-medium">{portfolioRisks.filter(r => r.score >= 6).length} high-priority risks</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Score', 'Risk', 'Project', 'Category', 'P×I', 'Status', 'Owner'].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {portfolioRisks.map(risk => (
+                  <tr key={risk.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${risk.score >= 9 ? 'bg-red-100 text-red-700' : risk.score >= 6 ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {risk.score}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 max-w-xs">
+                      <div className="text-sm font-medium text-gray-800 truncate">{risk.title}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: risk.project_color }} />
+                        <span className="truncate max-w-[120px]">{risk.project_name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs capitalize text-gray-500">{risk.category}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500 capitalize">{risk.probability.slice(0,1).toUpperCase()} × {risk.impact.slice(0,1).toUpperCase()}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded capitalize ${risk.status === 'open' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>{risk.status}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{risk.owner_name || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </div>

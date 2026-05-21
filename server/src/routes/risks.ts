@@ -54,6 +54,20 @@ router.delete('/:id', authenticate, (req: Request, res: Response) => {
   res.json({ success: true })
 })
 
+router.get('/portfolio/register', authenticate, (_req: Request, res: Response) => {
+  const risks = db.prepare(`
+    SELECT r.*, p.name as project_name, p.color as project_color,
+           u.name as owner_name
+    FROM risks r
+    JOIN projects p ON p.id = r.project_id
+    LEFT JOIN users u ON u.id = r.owner_id
+    WHERE r.status != 'closed' AND p.status != 'cancelled'
+    ORDER BY r.score DESC, r.created_at DESC
+    LIMIT 50
+  `).all()
+  res.json({ risks })
+})
+
 router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) => {
   const risksByProject = db.prepare(`
     SELECT p.id as project_id, p.name as project_name, p.color,
