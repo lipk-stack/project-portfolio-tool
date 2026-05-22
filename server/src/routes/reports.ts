@@ -468,4 +468,73 @@ router.get('/roadmap', (_req, res) => {
   res.json({ projects, milestones })
 })
 
+// Burn rate & completion forecast
+router.get('/forecast/:projectId', authenticate, (req, res) => {
+  const { projectId } = req.params
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as any
+  if (!project) return res.status(404).json({ error: 'Not found' })
+
+  // Weekly spending for last 8 weeks
+  const weeklySpend = db.prepare(`
+    SELECT strftime('%Y-%W', te.date) as week,
+      SUM(te.hours * u.hourly_rate) as cost,
+      SUM(te.hours) as hours
+    FROM time_entries te
+    JOIN users u ON u.id = te.user_id
+    WHERE te.project_id = ?
+    AND te.date >= date('now', '-8 weeks')
+    GROUP BY week ORDER BY week
+  `).all(projectId) as any[]
+
+  // Weekly task completion (story points)
+  const weeklyCompletion = db.prepare(`
+    SELECT strftime('%Y-%W', updated_at) as week,
+      SUM(story_points) as points, COUNT(*) as tasks
+    FROM tasks
+    WHERE project_id = ? AND status = 'done'
+    AND updated_at >= datetime('now', '-8 weeks')
+    AND parent_id IS NULL
+    GROUP BY week ORDER BY week
+  `).all(projectId) as any[]
+
+  const avgWeeklySpend = weeklySpend.length > 0
+    ? weeklySpend.reduce((s: number, w: any) => s + (w.cost || 0), 0) / weeklySpend.length
+    : 0
+
+  const avgWeeklyPoints = weeklyCompletion.length > 0
+    ? weeklyCompletion.reduce((s: number, w: any) => s + (w.points || 0), 0) / weeklyCompletion.length
+    : 0
+
+  const remaining = project.budget - project.spent
+  const weeksUntilBudgetExhausted = avgWeeklySpend > 0 ? remaining / avgWeeklySpend : null
+
+  const totalPoints = db.prepare('SELECT SUM(story_points) as total FROM tasks WHERE project_id = ? AND parent_id IS NULL').get(projectId) as any
+  const donePoints = db.prepare('SELECT SUM(story_points) as done FROM tasks WHERE project_id = ? AND status = \'done\' AND parent_id IS NULL').get(projectId) as any
+  const remainingPoints = (totalPoints?.total || 0) - (donePoints?.done || 0)
+  const weeksUntilCompletion = avgWeeklyPoints > 0 ? remainingPoints / avgWeeklyPoints : null
+
+  const projectedEnd = weeksUntilCompletion
+    ? new Date(Date.now() + weeksUntilCompletion * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    : null
+
+  const scheduledEnd = project.end_date
+  const scheduleVarianceDays = projectedEnd && scheduledEnd
+    ? Math.round((new Date(projectedEnd).getTime() - new Date(scheduledEnd).getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  res.json({
+    weeklySpend,
+    weeklyCompletion,
+    avgWeeklySpend: Math.round(avgWeeklySpend),
+    avgWeeklyPoints: Math.round(avgWeeklyPoints * 10) / 10,
+    weeksUntilBudgetExhausted: weeksUntilBudgetExhausted ? Math.round(weeksUntilBudgetExhausted * 10) / 10 : null,
+    weeksUntilCompletion: weeksUntilCompletion ? Math.round(weeksUntilCompletion * 10) / 10 : null,
+    projectedEnd,
+    scheduledEnd,
+    scheduleVarianceDays,
+    remainingBudget: Math.round(remaining),
+    remainingPoints,
+  })
+})
+
 export default router

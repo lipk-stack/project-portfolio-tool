@@ -6,6 +6,7 @@ const SHORTCUTS: Record<string, string> = {
   e: '/executive',
   p: '/portfolio',
   j: '/projects',
+  m: '/my-tasks',
   r: '/roadmap',
   t: '/resources',
   n: '/reports',

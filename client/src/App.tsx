@@ -12,6 +12,8 @@ import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Roadmap from './pages/Roadmap'
 import Executive from './pages/Executive'
+import MyTasks from './pages/MyTasks'
+import StatusReport from './pages/StatusReport'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -31,10 +33,12 @@ export default function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/:tab" element={<ProjectDetail />} />
+          <Route path="projects/:id/status-report" element={<StatusReport />} />
           <Route path="executive" element={<Executive />} />
           <Route path="roadmap" element={<Roadmap />} />
           <Route path="resources" element={<Resources />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="my-tasks" element={<MyTasks />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

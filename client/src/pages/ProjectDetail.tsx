@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, Zap, TrendingDown } from 'lucide-react'
+import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, Zap, TrendingDown, FileText } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
@@ -138,6 +138,13 @@ export default function ProjectDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              to={`/projects/${id}/status-report`}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <FileText size={14} />
+              Status Report
+            </Link>
             <div className="text-right">
               <div className="text-2xl font-bold text-gray-900">{project.completion_percent}%</div>
               <div className="text-xs text-gray-400">Complete</div>

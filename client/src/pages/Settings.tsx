@@ -211,11 +211,14 @@ export default function Settings() {
                 {[
                   { action: 'Open Command Palette', keys: ['⌘', 'K'] },
                   { action: 'Go to Dashboard', keys: ['G', 'D'] },
-                  { action: 'Go to Projects', keys: ['G', 'P'] },
+                  { action: 'Go to Executive', keys: ['G', 'E'] },
+                  { action: 'Go to Portfolio', keys: ['G', 'P'] },
+                  { action: 'Go to Projects', keys: ['G', 'J'] },
+                  { action: 'Go to My Tasks', keys: ['G', 'M'] },
                   { action: 'Go to Roadmap', keys: ['G', 'R'] },
-                  { action: 'Go to Reports', keys: ['G', 'A'] },
-                  { action: 'Toggle Dark Mode', keys: ['⌘', 'Shift', 'L'] },
-                  { action: 'New Project', keys: ['⌘', 'N'] },
+                  { action: 'Go to Resources', keys: ['G', 'T'] },
+                  { action: 'Go to Reports', keys: ['G', 'N'] },
+                  { action: 'Go to Settings', keys: ['G', 'S'] },
                   { action: 'Close Modal', keys: ['Esc'] },
                   { action: 'Save / Submit', keys: ['⌘', 'Enter'] },
                 ].map(item => (

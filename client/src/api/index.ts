@@ -114,6 +114,7 @@ export const evmApi = {
   burndown: (projectId: number) => api.get(`/reports/burndown/${projectId}`),
   roadmap: () => api.get('/reports/roadmap'),
   insights: () => api.get('/reports/insights'),
+  forecast: (projectId: number) => api.get(`/reports/forecast/${projectId}`),
 }
 
 export default api
