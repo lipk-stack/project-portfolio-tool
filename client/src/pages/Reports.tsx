@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { reportsApi } from '../api'
+import { reportsApi, evmApi } from '../api'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
 import { BarChart2, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react'
@@ -31,9 +31,11 @@ const HEALTH_COLORS: Record<string, string> = { green: '#22c55e', yellow: '#f59e
 export default function Reports() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [evmData, setEvmData] = useState<any>(null)
 
   useEffect(() => {
     reportsApi.overview().then(r => setData(r.data)).finally(() => setLoading(false))
+    evmApi.metrics().then(r => setEvmData(r.data)).catch(() => {})
   }, [])
 
   if (loading) return (
@@ -69,6 +71,77 @@ export default function Reports() {
             </div>
           </Card>
         ))}
+      </div>
+
+      {/* EVM Section */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Earned Value Analysis (EVM)</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Portfolio-wide cost and schedule performance indicators</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-400" /><span className="text-gray-500">CPI/SPI ≥ 1.0 = Good</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-400" /><span className="text-gray-500">CPI/SPI &lt; 1.0 = Issue</span></div>
+          </div>
+        </div>
+        {evmData && (
+          <>
+            {/* Portfolio summary */}
+            <div className="grid grid-cols-4 gap-3 mb-5">
+              {[
+                { label: 'Portfolio CPI', value: evmData.portfolio.CPI, desc: 'Cost efficiency', good: evmData.portfolio.CPI >= 1 },
+                { label: 'Portfolio SPI', value: evmData.portfolio.SPI, desc: 'Schedule efficiency', good: evmData.portfolio.SPI >= 1 },
+                { label: 'Estimate at Completion', value: formatCurrency(evmData.portfolio.EAC), desc: `vs ${formatCurrency(evmData.portfolio.BAC)} planned`, raw: true },
+                { label: 'Variance at Completion', value: formatCurrency(Math.abs(evmData.portfolio.VAC)), desc: evmData.portfolio.VAC >= 0 ? 'Under budget' : 'Over budget', good: evmData.portfolio.VAC >= 0, raw: true },
+              ].map(kpi => (
+                <div key={kpi.label} className={`rounded-lg p-3 ${kpi.raw ? 'bg-gray-50' : kpi.good ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <div className={`text-xl font-bold ${kpi.raw ? 'text-gray-900' : kpi.good ? 'text-green-700' : 'text-red-700'}`}>{kpi.value}</div>
+                  <div className="text-xs font-medium text-gray-700 mt-0.5">{kpi.label}</div>
+                  <div className="text-xs text-gray-400">{kpi.desc}</div>
+                </div>
+              ))}
+            </div>
+            {/* Per-project EVM table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left font-semibold text-gray-500 pb-2">Project</th>
+                    <th className="text-center font-semibold text-gray-500 pb-2">Planned %</th>
+                    <th className="text-center font-semibold text-gray-500 pb-2">Actual %</th>
+                    <th className="text-center font-semibold text-gray-500 pb-2">CPI</th>
+                    <th className="text-center font-semibold text-gray-500 pb-2">SPI</th>
+                    <th className="text-right font-semibold text-gray-500 pb-2">EAC</th>
+                    <th className="text-right font-semibold text-gray-500 pb-2">VAC</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {evmData.projects.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+                          <span className="font-medium text-gray-700 truncate max-w-[160px]">{p.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-2 text-center text-gray-600">{p.planned_percent}%</td>
+                      <td className="py-2 text-center text-gray-600">{p.completion_percent}%</td>
+                      <td className="py-2 text-center">
+                        <span className={`px-2 py-0.5 rounded font-bold ${p.CPI >= 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.CPI}</span>
+                      </td>
+                      <td className="py-2 text-center">
+                        <span className={`px-2 py-0.5 rounded font-bold ${p.SPI >= 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.SPI}</span>
+                      </td>
+                      <td className="py-2 text-right text-gray-600">{formatCurrency(p.EAC)}</td>
+                      <td className={`py-2 text-right font-semibold ${p.VAC >= 0 ? 'text-green-600' : 'text-red-600'}`}>{p.VAC >= 0 ? '+' : ''}{formatCurrency(p.VAC)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Row 1: Budget Performance + Health */}

@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { User } from '../types'
 
+// Initialize dark mode from localStorage
+if (localStorage.getItem('darkMode') === 'true') {
+  document.documentElement.classList.add('dark')
+}
+
 interface AuthState {
   user: User | null
   token: string | null
@@ -35,4 +40,30 @@ interface UIState {
 export const useUIStore = create<UIState>(set => ({
   sidebarCollapsed: false,
   toggleSidebar: () => set(s => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+}))
+
+interface ThemeState {
+  darkMode: boolean
+  toggleDarkMode: () => void
+}
+
+export const useThemeStore = create<ThemeState>(set => ({
+  darkMode: localStorage.getItem('darkMode') === 'true',
+  toggleDarkMode: () => set(s => {
+    const next = !s.darkMode
+    localStorage.setItem('darkMode', String(next))
+    if (next) document.documentElement.classList.add('dark')
+    else document.documentElement.classList.remove('dark')
+    return { darkMode: next }
+  }),
+}))
+
+interface NotificationState {
+  unreadCount: number
+  setUnreadCount: (n: number) => void
+}
+
+export const useNotificationStore = create<NotificationState>(set => ({
+  unreadCount: 0,
+  setUnreadCount: (n) => set({ unreadCount: n }),
 }))

@@ -172,6 +172,18 @@ export function initializeDatabase() {
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      entity_type TEXT,
+      entity_id INTEGER,
+      read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   seedDatabase()
@@ -406,6 +418,15 @@ function seedDatabase() {
     insertActivity.run('project', projects[2], users[7], 'task_completed', JSON.stringify({ task: 'Data Ingestion Pipeline' }))
     insertActivity.run('project', projects[0], users[1], 'budget_updated', JSON.stringify({ note: 'Approved additional $20k for performance optimization' }))
     insertActivity.run('project', projects[3], users[2], 'health_changed', JSON.stringify({ from: 'yellow', to: 'red', reason: 'Budget overrun risk' }))
+  })()
+
+  const insertNotif = db.prepare(`INSERT INTO notifications (user_id, type, title, message, entity_type, entity_id) VALUES (?, ?, ?, ?, ?, ?)`)
+  db.transaction(() => {
+    insertNotif.run(users[0], 'risk', 'High Risk Alert', 'SAP consultant availability is a critical risk on ERP Migration', 'project', projects[1])
+    insertNotif.run(users[0], 'budget', 'Budget Alert', 'Mobile App v3.0 has spent 93% of budget at 78% completion', 'project', projects[3])
+    insertNotif.run(users[0], 'milestone', 'Milestone Due', 'App Store Launch milestone is due in 13 days', 'project', projects[3])
+    insertNotif.run(users[0], 'task', 'Tasks Overdue', '3 tasks are overdue on Customer Portal Redesign', 'project', projects[0])
+    insertNotif.run(users[1], 'risk', 'Risk Updated', 'Data quality issues risk moved to mitigating status', 'project', projects[1])
   })()
 
   console.log('Database seeded successfully with demo data')

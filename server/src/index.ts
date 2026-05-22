@@ -14,6 +14,8 @@ import resourcesRoutes from './routes/resources'
 import risksRoutes from './routes/risks'
 import budgetRoutes from './routes/budget'
 import reportsRoutes from './routes/reports'
+import searchRoutes from './routes/search'
+import notificationsRoutes from './routes/notifications'
 
 initializeDatabase()
 
@@ -43,6 +45,8 @@ app.use('/api/resources', resourcesRoutes)
 app.use('/api/risks', risksRoutes)
 app.use('/api/budget', budgetRoutes)
 app.use('/api/reports', reportsRoutes)
+app.use('/api/search', searchRoutes)
+app.use('/api/notifications', notificationsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

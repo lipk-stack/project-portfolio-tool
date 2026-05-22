@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, Zap, TrendingDown } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
@@ -9,11 +9,15 @@ import Modal from '../components/ui/Modal'
 import GanttChart from '../components/gantt/GanttChart'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
+import SprintBoard from '../components/SprintBoard'
+import BurndownChart from '../components/BurndownChart'
+import RiskMatrix from '../components/RiskMatrix'
+import TaskComments from '../components/TaskComments'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'sprint' | 'budget' | 'risks' | 'team'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -101,6 +105,7 @@ export default function ProjectDetail() {
     { id: 'overview' as Tab, label: 'Overview', icon: BarChart2 },
     { id: 'tasks' as Tab, label: 'Tasks', icon: List },
     { id: 'gantt' as Tab, label: 'Gantt', icon: GitBranch },
+    { id: 'sprint' as Tab, label: 'Sprint', icon: Zap },
     { id: 'budget' as Tab, label: 'Budget', icon: DollarSign },
     { id: 'risks' as Tab, label: `Risks (${risks.filter(r => r.status !== 'closed').length})`, icon: AlertTriangle },
     { id: 'team' as Tab, label: 'Team', icon: Users },
@@ -351,6 +356,21 @@ export default function ProjectDetail() {
         </div>
       )}
 
+      {activeTab === 'sprint' && (
+        <div className="space-y-6">
+          <SprintBoard
+            tasks={tasks}
+            projectId={Number(id)}
+            onTaskUpdate={handleTaskUpdate}
+            onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
+            onAddTask={status => { setDefaultTaskStatus(status); setEditTask(null); setShowTaskForm(true) }}
+          />
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <BurndownChart projectId={Number(id)} />
+          </div>
+        </div>
+      )}
+
       {activeTab === 'budget' && budget && (
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12 md:col-span-8">
@@ -409,40 +429,57 @@ export default function ProjectDetail() {
       )}
 
       {activeTab === 'risks' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">{risks.length} Risks</h3>
+        <div className="grid grid-cols-12 gap-5">
+          {/* Risk matrix */}
+          <div className="col-span-12 md:col-span-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <RiskMatrix risks={risks} />
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-3">
-            {risks.map(risk => (
-              <div key={risk.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${risk.score >= 6 ? 'bg-red-100 text-red-700' : risk.score >= 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                        Score: {risk.score}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded capitalize ${risk.status === 'open' ? 'bg-orange-100 text-orange-700' : risk.status === 'mitigating' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{risk.status}</span>
-                      <span className="text-xs text-gray-400 capitalize">{risk.category}</span>
-                    </div>
-                    <div className="font-medium text-gray-800">{risk.title}</div>
-                    {risk.description && <div className="text-sm text-gray-500 mt-1">{risk.description}</div>}
-                    {risk.mitigation_plan && (
-                      <div className="text-xs text-blue-600 mt-1 flex items-start gap-1">
-                        <CheckCircle size={12} className="mt-0.5 flex-shrink-0" />
-                        {risk.mitigation_plan}
+          {/* Risk list */}
+          <div className="col-span-12 md:col-span-7">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">{risks.length} Risks</h3>
+              <div className="flex gap-2 text-xs">
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded font-medium">
+                  {risks.filter(r => r.score >= 6 && r.status !== 'closed').length} critical
+                </span>
+                <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">
+                  {risks.filter(r => r.score >= 3 && r.score < 6 && r.status !== 'closed').length} medium
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {risks.sort((a, b) => b.score - a.score).map(risk => (
+                <div key={risk.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs px-2 py-0.5 rounded font-bold ${risk.score >= 6 ? 'bg-red-100 text-red-700' : risk.score >= 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          Score: {risk.score}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded capitalize ${risk.status === 'open' ? 'bg-orange-100 text-orange-700' : risk.status === 'mitigating' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{risk.status}</span>
+                        <span className="text-xs text-gray-400 capitalize">{risk.category}</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-xs text-gray-400">P: <span className="capitalize">{risk.probability}</span></div>
-                    <div className="text-xs text-gray-400">I: <span className="capitalize">{risk.impact}</span></div>
-                    {risk.owner_name && <div className="text-xs text-gray-500 mt-1">{risk.owner_name}</div>}
+                      <div className="font-medium text-gray-800 text-sm">{risk.title}</div>
+                      {risk.description && <div className="text-xs text-gray-500 mt-1">{risk.description}</div>}
+                      {risk.mitigation_plan && (
+                        <div className="text-xs text-blue-600 mt-1.5 flex items-start gap-1 bg-blue-50 rounded px-2 py-1">
+                          <CheckCircle size={11} className="mt-0.5 flex-shrink-0" />
+                          {risk.mitigation_plan}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs text-gray-400">P: <span className="capitalize font-medium">{risk.probability}</span></div>
+                      <div className="text-xs text-gray-400">I: <span className="capitalize font-medium">{risk.impact}</span></div>
+                      {risk.owner_name && <div className="text-xs text-gray-500 mt-1">{risk.owner_name}</div>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {risks.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">No risks registered</div>}
+              ))}
+              {risks.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">No risks registered</div>}
+            </div>
           </div>
         </div>
       )}
@@ -490,7 +527,7 @@ export default function ProjectDetail() {
         isOpen={showTaskForm}
         onClose={() => { setShowTaskForm(false); setEditTask(null) }}
         title={editTask ? 'Edit Task' : 'New Task'}
-        size="md"
+        size="lg"
       >
         <TaskForm
           task={editTask || undefined}
@@ -499,6 +536,11 @@ export default function ProjectDetail() {
           onCancel={() => { setShowTaskForm(false); setEditTask(null) }}
           loading={savingTask}
         />
+        {editTask?.id && (
+          <div className="mt-2 px-1">
+            <TaskComments taskId={editTask.id} />
+          </div>
+        )}
       </Modal>
     </div>
   )

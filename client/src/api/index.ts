@@ -65,6 +65,8 @@ export const tasksApi = {
   addDependency: (id: number, data: object) => api.post(`/tasks/${id}/dependencies`, data),
   removeDependency: (id: number, predecessorId: number) => api.delete(`/tasks/${id}/dependencies/${predecessorId}`),
   logTime: (id: number, data: object) => api.post(`/tasks/${id}/time`, data),
+  getComments: (id: number) => api.get(`/tasks/${id}/comments`),
+  addComment: (id: number, content: string) => api.post(`/tasks/${id}/comments`, { content }),
 }
 
 export const resourcesApi = {
@@ -95,6 +97,22 @@ export const reportsApi = {
   overview: () => api.get('/reports/overview'),
   resourceUtilization: () => api.get('/reports/resource-utilization'),
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
+}
+
+export const searchApi = {
+  query: (q: string) => api.get('/search', { params: { q } }),
+}
+
+export const notificationsApi = {
+  list: () => api.get('/notifications'),
+  markRead: (id: number) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
+}
+
+export const evmApi = {
+  metrics: () => api.get('/reports/evm'),
+  burndown: (projectId: number) => api.get(`/reports/burndown/${projectId}`),
+  roadmap: () => api.get('/reports/roadmap'),
 }
 
 export default api
