@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, Zap, TrendingDown, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle, Zap, TrendingDown, FileText, RefreshCw } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
@@ -16,6 +16,7 @@ import RiskMatrix from '../components/RiskMatrix'
 import TaskComments from '../components/TaskComments'
 import TimeTracker from '../components/TimeTracker'
 import ForecastWidget from '../components/ForecastWidget'
+import MilestoneManager from '../components/MilestoneManager'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
@@ -48,6 +49,8 @@ export default function ProjectDetail() {
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [savingTask, setSavingTask] = useState(false)
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus>('todo')
+  const [healthToast, setHealthToast] = useState<{ health: string; dimensions: Record<string, string>; factors: Record<string, number> } | null>(null)
+  const [computingHealth, setComputingHealth] = useState(false)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -70,6 +73,18 @@ export default function ProjectDetail() {
     setLoading(true)
     loadProject().finally(() => setLoading(false))
   }, [loadProject])
+
+  const handleComputeHealth = async () => {
+    setComputingHealth(true)
+    try {
+      const res = await projectsApi.computeHealth(Number(id))
+      await loadProject()
+      setHealthToast(res.data)
+      setTimeout(() => setHealthToast(null), 6000)
+    } finally {
+      setComputingHealth(false)
+    }
+  }
 
   const handleTaskUpdate = async (taskId: number, status: TaskStatus) => {
     await tasksApi.update(taskId, { ...tasks.find(t => t.id === taskId), status })
@@ -139,6 +154,14 @@ export default function ProjectDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleComputeHealth}
+              disabled={computingHealth}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={computingHealth ? 'animate-spin' : ''} />
+              Refresh Health
+            </button>
             <Link
               to={`/projects/${id}/status-report`}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -218,23 +241,11 @@ export default function ProjectDetail() {
             {/* Milestones */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-gray-400" /> Milestones</h3>
-              {milestones.length === 0 ? (
-                <p className="text-sm text-gray-400">No milestones defined</p>
-              ) : (
-                <div className="relative pl-4">
-                  <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gray-200" />
-                  {milestones.map(m => (
-                    <div key={m.id} className="relative flex items-start gap-3 pb-4">
-                      <div className={`absolute -left-2 w-4 h-4 rounded-full border-2 ${m.status === 'achieved' ? 'bg-green-500 border-green-500' : m.status === 'missed' ? 'bg-red-500 border-red-500' : 'bg-white border-blue-500'} flex-shrink-0 mt-0.5`} />
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-800">{m.name}</div>
-                        <div className="text-xs text-gray-400">{format(parseISO(m.date), 'MMMM d, yyyy')} · {m.status}</div>
-                        {m.description && <div className="text-xs text-gray-500 mt-0.5">{m.description}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <MilestoneManager
+                projectId={Number(id)}
+                milestones={milestones}
+                onUpdate={loadProject}
+              />
             </div>
           </div>
           <div className="col-span-12 lg:col-span-4 space-y-5">
@@ -543,6 +554,32 @@ export default function ProjectDetail() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Health toast */}
+      {healthToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-4 max-w-sm animate-fade-in">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="font-semibold text-gray-900 text-sm">Health Updated</div>
+            <span className={`text-xs px-2 py-0.5 rounded font-bold capitalize ${healthToast.health === 'green' ? 'bg-green-100 text-green-700' : healthToast.health === 'yellow' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+              {healthToast.health}
+            </span>
+          </div>
+          <div className="space-y-1 text-xs text-gray-600">
+            {Object.entries(healthToast.dimensions).map(([key, val]) => (
+              <div key={key} className="flex justify-between">
+                <span className="capitalize text-gray-500">{key.replace('Health', '')}</span>
+                <span className={`font-medium capitalize ${val === 'green' ? 'text-green-600' : val === 'yellow' ? 'text-yellow-600' : 'text-red-600'}`}>{val}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400 space-y-0.5">
+            <div>Spend rate: {healthToast.factors.spendRate}%</div>
+            <div>Critical risks: {healthToast.factors.criticalRisks}</div>
+            <div>Overdue tasks: {healthToast.factors.overdueTasks}</div>
+          </div>
+          <button onClick={() => setHealthToast(null)} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-xs">✕</button>
         </div>
       )}
 

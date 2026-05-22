@@ -7,6 +7,7 @@ import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
 import ProjectForm from '../components/ProjectForm'
+import ProjectTemplates, { ProjectTemplate } from '../components/ProjectTemplates'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 
@@ -30,6 +31,8 @@ export default function Projects() {
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null)
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterHealth, setFilterHealth] = useState('all')
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
@@ -107,7 +110,7 @@ export default function Projects() {
             <button onClick={() => setViewMode('card')} className={`px-3 py-1.5 text-sm ${viewMode === 'card' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>&#x229E; Cards</button>
             <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 text-sm ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>&#x2261; List</button>
           </div>
-          <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+          <button onClick={() => setShowTemplates(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
             <Plus size={14} /> New Project
           </button>
         </div>
@@ -214,8 +217,27 @@ export default function Projects() {
         <ProjectForm onSubmit={handleCreate} onCancel={() => setShowCreate(false)} loading={creating} />
       </Modal>
 
-      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="New Project" size="lg">
-        <ProjectForm onSubmit={handleCreateProject} onCancel={() => setShowCreateModal(false)} loading={saving} />
+      {/* Template picker */}
+      <Modal isOpen={showTemplates} onClose={() => setShowTemplates(false)} title="" size="xl">
+        <ProjectTemplates
+          onSelect={t => { setSelectedTemplate(t); setShowTemplates(false); setShowCreateModal(true) }}
+          onDismiss={() => { setSelectedTemplate(null); setShowTemplates(false); setShowCreateModal(true) }}
+        />
+      </Modal>
+
+      {/* Project creation form */}
+      <Modal isOpen={showCreateModal} onClose={() => { setShowCreateModal(false); setSelectedTemplate(null) }} title={selectedTemplate ? `New ${selectedTemplate.name} Project` : 'New Project'} size="lg">
+        <ProjectForm
+          onSubmit={handleCreateProject}
+          onCancel={() => { setShowCreateModal(false); setSelectedTemplate(null) }}
+          loading={saving}
+          project={selectedTemplate ? {
+            status: selectedTemplate.defaults.status as any,
+            priority: selectedTemplate.defaults.priority as any,
+            phase: selectedTemplate.defaults.phase,
+            color: selectedTemplate.color,
+          } : undefined}
+        />
       </Modal>
     </div>
   )

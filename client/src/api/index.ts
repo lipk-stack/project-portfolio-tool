@@ -55,6 +55,7 @@ export const projectsApi = {
   updateMilestone: (id: number, mid: number, data: object) => api.put(`/projects/${id}/milestones/${mid}`, data),
   deleteMilestone: (id: number, mid: number) => api.delete(`/projects/${id}/milestones/${mid}`),
   getActivity: (id: number) => api.get(`/projects/${id}/activity`),
+  computeHealth: (id: number) => api.post(`/projects/${id}/compute-health`),
 }
 
 export const tasksApi = {

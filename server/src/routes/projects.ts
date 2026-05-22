@@ -83,6 +83,54 @@ router.get('/:id', authenticate, (req: Request, res: Response) => {
   res.json({ project, members, milestones, taskStats })
 })
 
+// Auto-compute project health based on data
+router.post('/:id/compute-health', authenticate, (req, res) => {
+  const { id } = req.params
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any
+  if (!project) return res.status(404).json({ error: 'Not found' })
+
+  const budget = project.budget || 0
+  const spent = project.spent || 0
+  const completion = (project.completion_percent || 0) / 100
+
+  // Budget health
+  const spendRate = budget > 0 ? spent / budget : 0
+  const budgetHealth = spendRate > 1.1 ? 'red' : spendRate > 0.9 ? 'yellow' : 'green'
+
+  // Schedule health
+  let schedHealth = 'green'
+  if (project.start_date && project.end_date) {
+    const start = new Date(project.start_date).getTime()
+    const end = new Date(project.end_date).getTime()
+    const now = Date.now()
+    const elapsed = (now - start) / (end - start)
+    const lag = elapsed - completion
+    schedHealth = lag > 0.25 ? 'red' : lag > 0.1 ? 'yellow' : 'green'
+  }
+
+  // Risk health
+  const criticalRisks = (db.prepare("SELECT COUNT(*) as c FROM risks WHERE project_id = ? AND status = 'open' AND score >= 6").get(id) as any).c
+  const riskHealth = criticalRisks >= 2 ? 'red' : criticalRisks === 1 ? 'yellow' : 'green'
+
+  // Overdue tasks
+  const overdueTasks = (db.prepare("SELECT COUNT(*) as c FROM tasks WHERE project_id = ? AND end_date < date('now') AND status NOT IN ('done','cancelled')").get(id) as any).c
+  const overdueHealth = overdueTasks >= 5 ? 'red' : overdueTasks >= 2 ? 'yellow' : 'green'
+
+  // Overall: worst of any dimension
+  const scores = { red: 0, yellow: 1, green: 2 }
+  const health = [budgetHealth, schedHealth, riskHealth, overdueHealth].reduce((worst, h) =>
+    scores[h as keyof typeof scores] < scores[worst as keyof typeof scores] ? h : worst
+  , 'green')
+
+  db.prepare("UPDATE projects SET health = ? WHERE id = ?").run(health, id)
+
+  res.json({
+    health,
+    dimensions: { budgetHealth, schedHealth, riskHealth, overdueHealth },
+    factors: { spendRate: Math.round(spendRate * 100), criticalRisks, overdueTasks }
+  })
+})
+
 router.put('/:id', authenticate, (req: Request, res: Response) => {
   const { name, description, portfolio_id, status, priority, health, phase, start_date, end_date, budget, spent, manager_id, color, tags, completion_percent } = req.body
   const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as { health: string } | undefined
