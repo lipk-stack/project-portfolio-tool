@@ -83,6 +83,7 @@ export default function Dashboard() {
 
   if (!data) return null
   const { kpis, upcomingMilestones, recentActivity, portfolioHealth, resourceUtilization } = data
+  const overdueTasks: any[] = (data as any).overdueTasks || []
 
   const pieData = [
     { name: 'On Track', value: kpis.onTrack, color: '#22c55e' },
@@ -288,6 +289,46 @@ export default function Dashboard() {
             </div>
           </Card>
         </div>
+
+        {/* Overdue Tasks */}
+        {overdueTasks.length > 0 && (
+          <div className="col-span-12">
+            <Card padding="none">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-red-100 bg-red-50">
+                <h2 className="font-semibold text-red-800 flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-500" />
+                  Overdue Tasks
+                  <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">{overdueTasks.length}</span>
+                </h2>
+                <button onClick={() => navigate('/my-tasks')} className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1">
+                  View all <ArrowRight size={12} />
+                </button>
+              </div>
+              <div className="divide-y divide-red-50">
+                {overdueTasks.slice(0, 5).map((task: any) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-4 px-5 py-3 hover:bg-red-50/30 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/projects/${task.project_id}`)}
+                  >
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-red-400" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{task.name}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: task.project_color }} />
+                        <span className="text-xs text-gray-500 truncate">{task.project_name}</span>
+                        {task.assignee_name && <span className="text-xs text-gray-400">· {task.assignee_name}</span>}
+                      </div>
+                    </div>
+                    <div className="text-xs text-red-600 font-medium flex-shrink-0">
+                      {format(parseISO(task.end_date), 'MMM d, yyyy')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ const SHORTCUTS: Record<string, string> = {
   j: '/projects',
   m: '/my-tasks',
   r: '/roadmap',
+  k: '/risks',
   t: '/resources',
   n: '/reports',
   s: '/settings',

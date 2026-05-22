@@ -14,6 +14,7 @@ import Roadmap from './pages/Roadmap'
 import Executive from './pages/Executive'
 import MyTasks from './pages/MyTasks'
 import StatusReport from './pages/StatusReport'
+import RiskRegister from './pages/RiskRegister'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="projects/:id/status-report" element={<StatusReport />} />
           <Route path="executive" element={<Executive />} />
           <Route path="roadmap" element={<Roadmap />} />
+          <Route path="risks" element={<RiskRegister />} />
           <Route path="resources" element={<Resources />} />
           <Route path="reports" element={<Reports />} />
           <Route path="my-tasks" element={<MyTasks />} />

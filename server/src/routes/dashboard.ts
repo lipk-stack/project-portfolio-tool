@@ -67,6 +67,29 @@ router.get('/summary', authenticate, (_req: Request, res: Response) => {
     ORDER BY date ASC
   `).all()
 
+  const overdueTasks = db.prepare(`
+    SELECT t.id, t.name, t.status, t.priority, t.end_date,
+           t.completion_percent, t.assignee_id,
+           u.name as assignee_name,
+           p.name as project_name, p.color as project_color, p.id as project_id
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    LEFT JOIN users u ON u.id = t.assignee_id
+    WHERE t.end_date < date('now')
+    AND t.status NOT IN ('done', 'cancelled')
+    AND p.status = 'active'
+    AND t.parent_id IS NULL
+    ORDER BY t.end_date ASC
+    LIMIT 8
+  `).all()
+
+  const todayMilestones = db.prepare(`
+    SELECT m.*, p.name as project_name, p.color as project_color
+    FROM milestones m
+    JOIN projects p ON p.id = m.project_id
+    WHERE m.date = date('now') AND m.status = 'upcoming'
+  `).all()
+
   res.json({
     kpis: {
       totalProjects,
@@ -86,6 +109,8 @@ router.get('/summary', authenticate, (_req: Request, res: Response) => {
     portfolioHealth,
     resourceUtilization,
     weeklyHours,
+    overdueTasks,
+    todayMilestones,
   })
 })
 

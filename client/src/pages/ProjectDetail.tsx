@@ -15,6 +15,7 @@ import VelocityChart from '../components/VelocityChart'
 import RiskMatrix from '../components/RiskMatrix'
 import TaskComments from '../components/TaskComments'
 import TimeTracker from '../components/TimeTracker'
+import ForecastWidget from '../components/ForecastWidget'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
@@ -252,6 +253,13 @@ export default function ProjectDetail() {
                 ))}
               </div>
             </div>
+            {/* Forecast */}
+            <ForecastWidget
+              projectId={Number(id)}
+              scheduledEnd={project.end_date}
+              budget={project.budget}
+              spent={project.spent}
+            />
             {/* Team */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Users size={16} className="text-gray-400" /> Team</h3>
