@@ -70,6 +70,7 @@ function flattenTree(tasks: Task[], expanded: Set<number>, depth = 0): Array<Tas
 export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectStart, projectEnd }: GanttProps) {
   const [zoom, setZoom] = useState<Zoom>('week')
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set(tasks.filter(t => !t.parent_id).map(t => t.id)))
+  const [dragging, setDragging] = useState<{ taskId: number; startX: number; origStart: Date; origEnd: Date; deltaX: number } | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const leftRef = useRef<HTMLDivElement>(null)
 
@@ -97,6 +98,12 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
       : zoom === 'week'
       ? (diff / 7) * cfg.cellWidth
       : (diff / 30.44) * cfg.cellWidth
+  }
+
+  function deltaXToDays(dx: number): number {
+    return zoom === 'day' ? Math.round(dx / cfg.cellWidth)
+      : zoom === 'week' ? Math.round((dx / cfg.cellWidth) * 7)
+      : Math.round((dx / cfg.cellWidth) * 30.44)
   }
 
   const tree = buildTree(tasks)
@@ -127,6 +134,34 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
       timelineRef.current.scrollLeft = scrollX
     }
   }, [todayX])
+
+  // Drag to reschedule
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragging) return
+      setDragging(prev => prev ? { ...prev, deltaX: e.clientX - prev.startX } : null)
+    }
+    const handleMouseUp = () => {
+      if (!dragging || !onTaskUpdate) { setDragging(null); return }
+      const days = deltaXToDays(dragging.deltaX)
+      if (days !== 0) {
+        const newStart = addDays(dragging.origStart, days)
+        const newEnd = addDays(dragging.origEnd, days)
+        onTaskUpdate(
+          dragging.taskId,
+          format(newStart, 'yyyy-MM-dd'),
+          format(newEnd, 'yyyy-MM-dd')
+        )
+      }
+      setDragging(null)
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [dragging, onTaskUpdate, zoom, cfg.cellWidth])
 
   const zoomLevels: Zoom[] = ['day', 'week', 'month']
 
@@ -255,7 +290,7 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
             {/* Task bars SVG */}
             <div style={{ height: totalHeight, position: 'relative' }}>
               {/* Background grid */}
-              <svg width={totalWidth} height={totalHeight} className="absolute inset-0">
+              <svg width={totalWidth} height={totalHeight} className="absolute inset-0" style={{ cursor: dragging ? 'grabbing' : 'default' }}>
                 {/* Weekend highlights for day view */}
                 {zoom === 'day' && columns.map((col, i) => {
                   const isWeekend = col.getDay() === 0 || col.getDay() === 6
@@ -299,24 +334,40 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
                     )
                   }
 
+                  const isDragging = dragging?.taskId === task.id
+                  const barX = isDragging ? x + dragging!.deltaX : x
+
                   return (
-                    <g key={task.id} className="cursor-pointer" onClick={() => onTaskClick?.(task)}>
+                    <g
+                      key={task.id}
+                      className="cursor-pointer"
+                      onClick={() => onTaskClick?.(task)}
+                      onMouseDown={(e) => {
+                        if (!onTaskUpdate) return
+                        e.preventDefault()
+                        const startDate = parseISO(task.start_date!)
+                        const endDate = parseISO(task.end_date!)
+                        setDragging({ taskId: task.id, startX: e.clientX, origStart: startDate, origEnd: endDate, deltaX: 0 })
+                      }}
+                    >
                       {/* Background bar */}
-                      <rect x={x} y={y} width={w} height={h} rx={4} ry={4} fill={colors.bar} opacity={0.25} />
+                      <rect x={barX} y={y} width={w} height={h} rx={4} ry={4} fill={colors.bar} opacity={0.25} />
                       {/* Progress bar */}
-                      <rect x={x} y={y} width={progressW} height={h} rx={4} ry={4} fill={colors.bar} />
+                      <rect x={barX} y={y} width={progressW} height={h} rx={4} ry={4} fill={colors.bar} />
                       {/* Critical path indicator */}
-                      {isCritical && <rect x={x} y={y} width={w} height={h} rx={4} ry={4} fill="none" stroke="#ef4444" strokeWidth={2} />}
+                      {isCritical && <rect x={barX} y={y} width={w} height={h} rx={4} ry={4} fill="none" stroke="#ef4444" strokeWidth={2} />}
                       {/* Priority indicator */}
                       {(task.priority === 'critical' || task.priority === 'high') && (
-                        <rect x={x} y={y} width={3} height={h} rx={1} fill={PRIORITY_STROKE[task.priority]} />
+                        <rect x={barX} y={y} width={3} height={h} rx={1} fill={PRIORITY_STROKE[task.priority]} />
                       )}
                       {/* Label */}
                       {w > 50 && (
-                        <text x={x + 6} y={y + h / 2 + 4} fontSize={10} fill="white" fontWeight="500" style={{ userSelect: 'none' }}>
+                        <text x={barX + 6} y={y + h / 2 + 4} fontSize={10} fill="white" fontWeight="500" style={{ userSelect: 'none' }}>
                           {task.name.length > Math.floor(w / 7) ? task.name.slice(0, Math.floor(w / 7) - 1) + '…' : task.name}
                         </text>
                       )}
+                      {/* Drag outline */}
+                      {isDragging && <rect x={barX} y={y} width={w} height={h} rx={4} ry={4} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 2" />}
                       <title>{`${task.name} | ${task.start_date} → ${task.end_date} | ${task.completion_percent}%`}</title>
                     </g>
                   )
@@ -349,6 +400,20 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
                     <path d="M0,0 L0,6 L8,3 z" fill="#64748b" />
                   </marker>
                 </defs>
+
+                {/* Drag tooltip */}
+                {dragging && (() => {
+                  const days = deltaXToDays(dragging.deltaX)
+                  const draggedTask = flatTasks.find(t => t.id === dragging.taskId)
+                  if (!draggedTask?.start_date) return null
+                  const newStart = addDays(parseISO(draggedTask.start_date), days)
+                  const newEnd = addDays(parseISO(draggedTask.end_date!), days)
+                  return (
+                    <text x={xOf(newStart)} y={HEADER_HEIGHT - 5} fontSize={10} fill="#3b82f6" fontWeight="600">
+                      {format(newStart, 'MMM d')} → {format(newEnd, 'MMM d')}
+                    </text>
+                  )
+                })()}
               </svg>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Minus, FolderOpen, CheckCircle, AlertTriangle, XCircle, DollarSign, Users, Shield, Calendar, Activity, Clock, ArrowRight, LucideIcon } from 'lucide-react'
-import { dashboardApi } from '../api'
+import { dashboardApi, evmApi } from '../api'
 import { DashboardSummary, Milestone, ActivityItem } from '../types'
 import Card from '../components/ui/Card'
 import { HealthDot } from '../components/ui/Badge'
@@ -68,7 +68,7 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       dashboardApi.summary(),
-      import('../api').then(m => m.evmApi.metrics()).catch(() => null),
+      evmApi.metrics().catch(() => null),
     ]).then(([sumRes, evmRes]) => {
       setData(sumRes.data)
       if (evmRes) setEvmData(evmRes.data)

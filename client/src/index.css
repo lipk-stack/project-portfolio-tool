@@ -36,3 +36,18 @@
   .animate-fade-in { animation: fade-in 0.3s ease-out; }
   .animate-slide-in { animation: slide-in 0.2s ease-out; }
 }
+
+@media print {
+  /* Hide non-content UI when printing */
+  aside, header, .print\:hidden { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+  body { background: white !important; }
+  .bg-gradient-to-r { background: #1e293b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
+  .rounded-xl, .rounded-lg { border-radius: 8px !important; }
+  /* Force page breaks for long content */
+  .page-break-before { page-break-before: always; }
+  .page-break-after { page-break-after: always; }
+  /* Ensure borders print */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

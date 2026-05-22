@@ -2,12 +2,13 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  Activity, Zap, Map
+  Activity, Zap, Map, TrendingUp
 } from 'lucide-react'
 import { useUIStore } from '../../store'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/executive', label: 'Executive', icon: TrendingUp },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/projects', label: 'Projects', icon: FolderOpen },
   { to: '/roadmap', label: 'Roadmap', icon: Map },

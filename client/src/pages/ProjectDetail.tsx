@@ -11,6 +11,7 @@ import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import SprintBoard from '../components/SprintBoard'
 import BurndownChart from '../components/BurndownChart'
+import VelocityChart from '../components/VelocityChart'
 import RiskMatrix from '../components/RiskMatrix'
 import TaskComments from '../components/TaskComments'
 import TimeTracker from '../components/TimeTracker'
@@ -353,6 +354,10 @@ export default function ProjectDetail() {
             onTaskClick={task => { setEditTask(task); setShowTaskForm(true) }}
             projectStart={project.start_date}
             projectEnd={project.end_date}
+            onTaskUpdate={async (taskId, start, end) => {
+              await tasksApi.update(taskId, { start_date: start, end_date: end })
+              await loadProject()
+            }}
           />
         </div>
       )}
@@ -368,6 +373,9 @@ export default function ProjectDetail() {
           />
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <BurndownChart projectId={Number(id)} />
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <VelocityChart projectId={Number(id)} />
           </div>
         </div>
       )}

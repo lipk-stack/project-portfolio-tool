@@ -236,6 +236,213 @@ router.get('/burndown/:projectId', (req, res) => {
   res.json({ burndown, totalPoints, project: { name: project.name, color: project.color } })
 })
 
+// Smart AI Insights endpoint
+router.get('/insights', authenticate, (_req, res) => {
+  const insights: Array<{
+    id: string
+    type: 'cost' | 'schedule' | 'risk' | 'resource' | 'quality'
+    severity: 'critical' | 'warning' | 'info' | 'success'
+    title: string
+    description: string
+    project?: string
+    action?: string
+    metric?: string
+  }> = []
+
+  // Cost insights
+  const overBudgetProjects = db.prepare(`
+    SELECT name, budget, spent, ROUND((spent/budget)*100,1) as spend_pct
+    FROM projects WHERE status='active' AND budget > 0 AND (spent/budget) > 0.9
+    ORDER BY (spent/budget) DESC
+  `).all() as any[]
+
+  overBudgetProjects.forEach((p: any) => {
+    insights.push({
+      id: `cost-${p.name}`,
+      type: 'cost',
+      severity: p.spend_pct > 100 ? 'critical' : 'warning',
+      title: p.spend_pct > 100 ? `${p.name} is over budget` : `${p.name} approaching budget limit`,
+      description: `Spent ${p.spend_pct}% of $${(p.budget/1000).toFixed(0)}K budget. ${p.spend_pct > 100 ? 'Immediate action required.' : 'Review remaining scope.'}`,
+      project: p.name,
+      action: 'Review budget allocation and scope',
+      metric: `${p.spend_pct}% spent`,
+    })
+  })
+
+  // Schedule insights
+  const behindScheduleProjects = db.prepare(`
+    SELECT name, completion_percent, start_date, end_date,
+      ROUND((julianday('now') - julianday(start_date)) / (julianday(end_date) - julianday(start_date)) * 100, 1) as expected_pct
+    FROM projects WHERE status='active' AND end_date IS NOT NULL AND start_date IS NOT NULL
+    AND julianday('now') BETWEEN julianday(start_date) AND julianday(end_date)
+  `).all() as any[]
+
+  behindScheduleProjects.forEach((p: any) => {
+    const lag = (p.expected_pct || 0) - (p.completion_percent || 0)
+    if (lag > 20) {
+      insights.push({
+        id: `schedule-${p.name}`,
+        type: 'schedule',
+        severity: lag > 35 ? 'critical' : 'warning',
+        title: `${p.name} is behind schedule`,
+        description: `Expected ${p.expected_pct}% complete but only ${p.completion_percent}% done — ${lag.toFixed(0)}% schedule gap.`,
+        project: p.name,
+        action: 'Review task assignments and deadlines',
+        metric: `${lag.toFixed(0)}% behind`,
+      })
+    }
+  })
+
+  // Overdue tasks
+  const overdueTasks = (db.prepare(`
+    SELECT COUNT(*) as c, COUNT(DISTINCT project_id) as projects
+    FROM tasks WHERE end_date < date('now') AND status NOT IN ('done','cancelled')
+  `).get() as any)
+  if (overdueTasks.c > 0) {
+    insights.push({
+      id: 'overdue-tasks',
+      type: 'schedule',
+      severity: overdueTasks.c > 10 ? 'critical' : 'warning',
+      title: `${overdueTasks.c} tasks are overdue`,
+      description: `${overdueTasks.c} tasks past their due date across ${overdueTasks.projects} projects. This impacts team velocity and stakeholder confidence.`,
+      action: 'Review and reschedule overdue tasks',
+      metric: `${overdueTasks.c} tasks`,
+    })
+  }
+
+  // Risk insights
+  const highRisks = db.prepare(`
+    SELECT r.title, r.score, r.probability, r.impact, p.name as project_name
+    FROM risks r JOIN projects p ON p.id = r.project_id
+    WHERE r.status = 'open' AND r.score >= 6
+    ORDER BY r.score DESC LIMIT 5
+  `).all() as any[]
+
+  if (highRisks.length > 0) {
+    insights.push({
+      id: 'high-risks',
+      type: 'risk',
+      severity: 'critical',
+      title: `${highRisks.length} critical risks require attention`,
+      description: `Top risk: "${highRisks[0].title}" (${highRisks[0].project_name}) with score ${highRisks[0].score}. Immediate mitigation planning needed.`,
+      action: 'Create mitigation plans for critical risks',
+      metric: `${highRisks.length} critical`,
+    })
+  }
+
+  // Unmitigated risks
+  const unmitigatedHighRisks = (db.prepare(`
+    SELECT COUNT(*) as c FROM risks WHERE status='open' AND score >= 4 AND (mitigation IS NULL OR mitigation = '')
+  `).get() as any).c
+  if (unmitigatedHighRisks > 0) {
+    insights.push({
+      id: 'unmitigated-risks',
+      type: 'risk',
+      severity: 'warning',
+      title: `${unmitigatedHighRisks} high risks without mitigation plans`,
+      description: 'These risks have no documented mitigation strategy, increasing portfolio exposure.',
+      action: 'Document mitigation plans for all high risks',
+      metric: `${unmitigatedHighRisks} unmitigated`,
+    })
+  }
+
+  // Resource insights
+  const overloadedResources = db.prepare(`
+    SELECT u.name, u.department, SUM(te.hours) as weekly_hours, u.capacity
+    FROM time_entries te JOIN users u ON u.id = te.user_id
+    WHERE te.date >= date('now', '-7 days')
+    GROUP BY u.id HAVING weekly_hours > u.capacity * 1.1
+    ORDER BY weekly_hours DESC
+  `).all() as any[]
+
+  if (overloadedResources.length > 0) {
+    const top = overloadedResources[0]
+    insights.push({
+      id: 'overloaded-resources',
+      type: 'resource',
+      severity: 'warning',
+      title: `${overloadedResources.length} team members are overloaded`,
+      description: `${top.name} logged ${top.weekly_hours.toFixed(0)}h this week (capacity: ${top.capacity}h). Risk of burnout and quality issues.`,
+      action: 'Redistribute workload across team members',
+      metric: `${overloadedResources.length} overloaded`,
+    })
+  }
+
+  // Blocked tasks
+  const blockedTasks = (db.prepare(`
+    SELECT COUNT(*) as c FROM tasks WHERE status = 'blocked'
+  `).get() as any).c
+  if (blockedTasks > 0) {
+    insights.push({
+      id: 'blocked-tasks',
+      type: 'quality',
+      severity: blockedTasks > 5 ? 'critical' : 'warning',
+      title: `${blockedTasks} tasks are blocked`,
+      description: `Blocked tasks are stalling team progress. Unblocking these will improve velocity and schedule performance.`,
+      action: 'Identify and remove blockers immediately',
+      metric: `${blockedTasks} blocked`,
+    })
+  }
+
+  // Velocity trend
+  const velocityTrend = db.prepare(`
+    SELECT strftime('%Y-%W', updated_at) as week, SUM(story_points) as points
+    FROM tasks WHERE status='done' AND story_points IS NOT NULL
+    AND updated_at >= datetime('now', '-8 weeks')
+    GROUP BY week ORDER BY week DESC LIMIT 4
+  `).all() as any[]
+
+  if (velocityTrend.length >= 2) {
+    const recent = velocityTrend[0]?.points || 0
+    const older = velocityTrend[velocityTrend.length - 1]?.points || 1
+    const velocityChange = ((recent - older) / older) * 100
+    if (velocityChange < -20) {
+      insights.push({
+        id: 'velocity-drop',
+        type: 'quality',
+        severity: 'warning',
+        title: 'Team velocity is declining',
+        description: `Story point completion dropped ${Math.abs(velocityChange).toFixed(0)}% over the past 4 weeks. Team may be understaffed or facing technical debt.`,
+        action: 'Review sprint capacity and technical blockers',
+        metric: `${velocityChange.toFixed(0)}% trend`,
+      })
+    } else if (velocityChange > 20) {
+      insights.push({
+        id: 'velocity-up',
+        type: 'quality',
+        severity: 'success',
+        title: 'Team velocity is improving',
+        description: `Story point completion increased ${velocityChange.toFixed(0)}% over the past 4 weeks. Keep up the momentum.`,
+        metric: `+${velocityChange.toFixed(0)}% trend`,
+      })
+    }
+  }
+
+  // Projects on track
+  const onTrackCount = (db.prepare(`
+    SELECT COUNT(*) as c FROM projects WHERE status='active' AND health='on_track'
+  `).get() as any).c
+  const activeCount = (db.prepare(`
+    SELECT COUNT(*) as c FROM projects WHERE status='active'
+  `).get() as any).c
+  if (activeCount > 0 && onTrackCount === activeCount) {
+    insights.push({
+      id: 'all-on-track',
+      type: 'quality',
+      severity: 'success',
+      title: 'All projects are on track',
+      description: `All ${activeCount} active projects report healthy status. Portfolio is performing well.`,
+      metric: `${activeCount}/${activeCount} healthy`,
+    })
+  }
+
+  // Sort: critical first, then warnings, then info/success
+  const order = { critical: 0, warning: 1, info: 2, success: 3 }
+  insights.sort((a, b) => order[a.severity] - order[b.severity])
+
+  res.json({ insights, generatedAt: new Date().toISOString() })
+})
+
 // Portfolio roadmap data
 router.get('/roadmap', (_req, res) => {
   const projects = db.prepare(`

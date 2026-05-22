@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import KeyboardNav from '../KeyboardNav'
 import { useUIStore, useThemeStore } from '../../store'
 
 export default function Layout() {
@@ -10,6 +11,7 @@ export default function Layout() {
   return (
     <div className={`min-h-screen ${darkMode ? 'dark' : ''}`}>
       <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+        <KeyboardNav />
         <Sidebar />
         <div className={`flex flex-col flex-1 min-w-0 transition-all duration-300 ${collapsed ? 'ml-16' : 'ml-64'}`}>
           <Header />

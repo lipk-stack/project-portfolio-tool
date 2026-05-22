@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store'
+import { ToastProvider } from './components/Toast'
 import Layout from './components/layout/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -10,6 +11,7 @@ import Resources from './pages/Resources'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
 import Roadmap from './pages/Roadmap'
+import Executive from './pages/Executive'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -19,6 +21,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <ToastProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -28,6 +31,7 @@ export default function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/:tab" element={<ProjectDetail />} />
+          <Route path="executive" element={<Executive />} />
           <Route path="roadmap" element={<Roadmap />} />
           <Route path="resources" element={<Resources />} />
           <Route path="reports" element={<Reports />} />
@@ -35,5 +39,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   )
 }
