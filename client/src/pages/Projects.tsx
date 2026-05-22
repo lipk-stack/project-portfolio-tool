@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, Filter, Grid3X3, List, ChevronRight } from 'lucide-react'
 import { projectsApi } from '../api'
 import { Project } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
-import ProjectForm from '../components/forms/ProjectForm'
+import ProjectForm from '../components/ProjectForm'
+import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 
 const STATUS_OPTIONS = ['', 'planning', 'active', 'on_hold', 'completed', 'cancelled']
@@ -28,6 +29,11 @@ export default function Projects() {
   const [showFilters, setShowFilters] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterHealth, setFilterHealth] = useState('all')
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
+  const [saving, setSaving] = useState(false)
   const navigate = useNavigate()
 
   const fetchProjects = () => {
@@ -40,9 +46,12 @@ export default function Projects() {
 
   useEffect(() => { fetchProjects() }, [filters])
 
-  const filtered = projects.filter(p =>
-    !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.description?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = projects
+    .filter(p => filterStatus === 'all' || p.status === filterStatus)
+    .filter(p => filterHealth === 'all' || p.health === filterHealth)
+    .filter(p =>
+      !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.description?.toLowerCase().includes(search.toLowerCase())
+    )
 
   const handleCreate = async (data: Partial<Project>) => {
     setCreating(true)
@@ -51,6 +60,18 @@ export default function Projects() {
       setShowCreate(false)
       fetchProjects()
     } finally { setCreating(false) }
+  }
+
+  const handleCreateProject = async (data: Partial<Project>) => {
+    setSaving(true)
+    try {
+      await projectsApi.create(data)
+      setShowCreateModal(false)
+      const res = await projectsApi.list()
+      setProjects(res.data.projects)
+    } catch (e) {
+      console.error('Failed to create project', e)
+    } finally { setSaving(false) }
   }
 
   const stats = {
@@ -63,14 +84,33 @@ export default function Projects() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
           <p className="text-sm text-gray-500 mt-0.5">{stats.active} active · {stats.onTrack} on track · {stats.atRisk} needs attention</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus size={16} /> New Project
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
+            <option value="all">All Status</option>
+            <option value="planning">Planning</option>
+            <option value="active">Active</option>
+            <option value="on_hold">On Hold</option>
+            <option value="completed">Completed</option>
+          </select>
+          <select value={filterHealth} onChange={e => setFilterHealth(e.target.value)} className="text-sm border border-gray-200 rounded-lg px-3 py-1.5">
+            <option value="all">All Health</option>
+            <option value="green">On Track</option>
+            <option value="yellow">At Risk</option>
+            <option value="red">Off Track</option>
+          </select>
+          <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+            <button onClick={() => setViewMode('card')} className={`px-3 py-1.5 text-sm ${viewMode === 'card' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>&#x229E; Cards</button>
+            <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 text-sm ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>&#x2261; List</button>
+          </div>
+          <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={14} /> New Project
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}

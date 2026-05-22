@@ -61,11 +61,18 @@ function getActionText(action: string, details?: string): string {
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null)
+  const [evmData, setEvmData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
-    dashboardApi.summary().then(r => setData(r.data)).finally(() => setLoading(false))
+    Promise.all([
+      dashboardApi.summary(),
+      import('../api').then(m => m.evmApi.metrics()).catch(() => null),
+    ]).then(([sumRes, evmRes]) => {
+      setData(sumRes.data)
+      if (evmRes) setEvmData(evmRes.data)
+    }).finally(() => setLoading(false))
   }, [])
 
   if (loading) return (
@@ -103,6 +110,37 @@ export default function Dashboard() {
         <KPICard title="Budget Used" value={`${kpis.budgetUtilization}%`} subtitle={`${formatCurrency(kpis.totalSpent)} of ${formatCurrency(kpis.totalBudget)}`} icon={DollarSign} color={kpis.budgetUtilization > 90 ? 'bg-red-500' : 'bg-purple-500'} />
         <KPICard title="Open Risks" value={kpis.openRisks} subtitle={`${kpis.highRisks} high severity`} icon={Shield} color={kpis.highRisks > 3 ? 'bg-red-500' : 'bg-orange-500'} trend={kpis.highRisks > 3 ? 'down' : 'neutral'} />
       </div>
+
+      {/* EVM Performance Strip */}
+      {evmData && (
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 text-white">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm font-semibold">Earned Value Performance</div>
+              <div className="text-xs text-slate-400">Portfolio health based on cost & schedule performance</div>
+            </div>
+            <button onClick={() => navigate('/reports')} className="text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1">
+              Full EVM Analysis <ArrowRight size={12} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Cost Perf. Index', value: evmData.portfolio.CPI, good: evmData.portfolio.CPI >= 1, suffix: '', desc: 'CPI ≥ 1 = under budget' },
+              { label: 'Schedule Perf. Index', value: evmData.portfolio.SPI, good: evmData.portfolio.SPI >= 1, suffix: '', desc: 'SPI ≥ 1 = ahead of schedule' },
+              { label: 'Estimate at Complete', value: formatCurrency(evmData.portfolio.EAC), raw: true, desc: `vs ${formatCurrency(evmData.portfolio.BAC)} planned` },
+              { label: 'Cost Variance', value: formatCurrency(Math.abs(evmData.portfolio.VAC)), good: evmData.portfolio.VAC >= 0, prefix: evmData.portfolio.VAC >= 0 ? '+' : '-', desc: evmData.portfolio.VAC >= 0 ? 'Under budget' : 'Over budget' },
+            ].map(kpi => (
+              <div key={kpi.label} className="bg-white/10 rounded-lg p-3">
+                <div className={`text-lg font-bold ${kpi.raw ? 'text-white' : kpi.good ? 'text-green-300' : 'text-red-300'}`}>
+                  {('prefix' in kpi ? kpi.prefix : '')}{kpi.value}
+                </div>
+                <div className="text-xs text-slate-300 font-medium">{kpi.label}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{kpi.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="grid grid-cols-12 gap-6">
