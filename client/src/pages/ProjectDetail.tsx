@@ -13,6 +13,7 @@ import SprintBoard from '../components/SprintBoard'
 import BurndownChart from '../components/BurndownChart'
 import RiskMatrix from '../components/RiskMatrix'
 import TaskComments from '../components/TaskComments'
+import TimeTracker from '../components/TimeTracker'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
@@ -539,6 +540,16 @@ export default function ProjectDetail() {
         {editTask?.id && (
           <div className="mt-2 px-1">
             <TaskComments taskId={editTask.id} />
+          </div>
+        )}
+        {editTask?.id && (
+          <div className="mt-2 px-1">
+            <TimeTracker
+              taskId={editTask.id}
+              taskName={editTask.name || ''}
+              projectId={Number(id)}
+              onTimeLogged={() => loadProject()}
+            />
           </div>
         )}
       </Modal>

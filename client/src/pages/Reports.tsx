@@ -46,11 +46,32 @@ export default function Reports() {
 
   if (!data) return null
 
+  const exportCSV = () => {
+    if (!data) return
+    const rows = [
+      ['Project', 'Budget', 'Spent', 'Completion %', 'Spend Rate %', 'Health'],
+      ...data.budgetPerformance.map(p => [p.name, p.budget, p.spent, p.completion_percent, p.spend_rate, p.health])
+    ]
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'portfolio-report.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Portfolio-wide performance metrics</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Portfolio-wide performance metrics</p>
+        </div>
+        <button onClick={exportCSV} className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          &#x2B07; Export CSV
+        </button>
       </div>
 
       {/* Summary KPIs */}

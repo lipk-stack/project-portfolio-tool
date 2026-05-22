@@ -4,14 +4,15 @@ import { ResourceSummary } from '../types'
 import Card from '../components/ui/Card'
 import Progress from '../components/ui/Progress'
 import Avatar from '../components/ui/Avatar'
+import WorkloadHeatmap from '../components/WorkloadHeatmap'
 import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 export default function Resources() {
   const [resources, setResources] = useState<ResourceSummary[]>([])
   const [matrix, setMatrix] = useState<{ users: Array<{ id: number; name: string; department: string }>; projects: Array<{ id: number; name: string; color: string }>; matrix: Array<{ user_id: number; project_id: number; allocation_percent: number | null }> } | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeView, setActiveView] = useState<'overview' | 'matrix'>('overview')
+  const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'heatmap'>('overview')
 
   useEffect(() => {
     Promise.all([
@@ -55,7 +56,7 @@ export default function Resources() {
           <p className="text-sm text-gray-500 mt-0.5">{resources.length} team members · avg {avgUtilization}% utilization</p>
         </div>
         <div className="flex items-center gap-2">
-          {(['overview', 'matrix'] as const).map(v => (
+          {(['overview', 'matrix', 'heatmap'] as const).map(v => (
             <button key={v} onClick={() => setActiveView(v)} className={`px-3 py-1.5 text-sm rounded-lg capitalize border transition-colors ${activeView === v ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{v}</button>
           ))}
         </div>
@@ -140,6 +141,14 @@ export default function Resources() {
             </div>
           </div>
         </>
+      )}
+
+      {activeView === 'heatmap' && (
+        <Card>
+          <h3 className="font-semibold text-gray-900 mb-1">Workload Heatmap</h3>
+          <p className="text-xs text-gray-400 mb-4">Daily team utilization across the month</p>
+          <WorkloadHeatmap resources={resources} />
+        </Card>
       )}
 
       {activeView === 'matrix' && matrix && (

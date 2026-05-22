@@ -152,10 +152,10 @@ export default function Projects() {
           <FolderOpen size={48} className="mx-auto mb-3 opacity-30" />
           <p>No projects found</p>
         </div>
-      ) : view === 'grid' ? (
+      ) : viewMode === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(project => (
-            <ProjectCard key={project.id} project={project} onClick={() => navigate(`/projects/${project.id}`)} />
+            <EnhancedProjectCard key={project.id} project={project} onClick={() => navigate(`/projects/${project.id}`)} />
           ))}
         </div>
       ) : (
@@ -181,6 +181,7 @@ export default function Projects() {
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
                       <div>
                         <div className="text-sm font-medium text-gray-900">{project.name}</div>
+                        {project.portfolio_name && <div className="text-xs text-blue-500">{project.portfolio_name}</div>}
                         {project.manager_name && <div className="text-xs text-gray-400">{project.manager_name}</div>}
                       </div>
                     </div>
@@ -212,6 +213,10 @@ export default function Projects() {
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New Project" size="lg">
         <ProjectForm onSubmit={handleCreate} onCancel={() => setShowCreate(false)} loading={creating} />
       </Modal>
+
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="New Project" size="lg">
+        <ProjectForm onSubmit={handleCreateProject} onCancel={() => setShowCreateModal(false)} loading={saving} />
+      </Modal>
     </div>
   )
 }
@@ -241,6 +246,72 @@ function ProjectCard({ project, onClick }: { project: Project; onClick: () => vo
         <div className="text-xs">
           <span className="font-medium text-gray-700">{formatCurrency(project.spent)}</span>
           <span className="text-gray-400"> / {formatCurrency(project.budget)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EnhancedProjectCard({ project, onClick }: { project: Project; onClick: () => void }) {
+  const budgetPct = project.budget > 0 ? Math.round((project.spent / project.budget) * 100) : 0
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer overflow-hidden flex" onClick={onClick}>
+      {/* Color strip */}
+      <div className="w-1.5 flex-shrink-0" style={{ backgroundColor: project.color }} />
+      <div className="flex-1 p-4">
+        {/* Header row */}
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <HealthBadge health={project.health} />
+            <PriorityBadge priority={project.priority} />
+          </div>
+          {project.open_risk_count != null && project.open_risk_count > 0 && (
+            <span className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium">{project.open_risk_count} risks</span>
+          )}
+        </div>
+
+        {/* Name & portfolio */}
+        <h3 className="font-semibold text-gray-900 leading-tight mb-0.5">{project.name}</h3>
+        {project.portfolio_name && (
+          <div className="text-xs text-blue-500 mb-1">{project.portfolio_name}</div>
+        )}
+
+        {/* Progress */}
+        <div className="mb-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-500">Progress</span>
+            <span className="text-xs font-semibold text-gray-700">{project.completion_percent}%</span>
+          </div>
+          <Progress value={project.completion_percent} size="sm" color="auto" />
+        </div>
+
+        {/* Budget */}
+        {project.budget > 0 && (
+          <div className="mb-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-500">Budget</span>
+              <span className="text-xs text-gray-600">{formatCurrency(project.spent)} / {formatCurrency(project.budget)}</span>
+            </div>
+            <Progress value={budgetPct} size="sm" color={budgetPct > 90 ? 'red' : 'blue'} />
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+          <div className="flex items-center gap-1">
+            {project.manager_name && (
+              <Avatar name={project.manager_name} size="xs" />
+            )}
+            <span className="text-xs text-gray-500 truncate max-w-[80px]">{project.manager_name || 'No manager'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {project.end_date && (
+              <span className="text-xs text-gray-400">{format(parseISO(project.end_date), 'MMM d')}</span>
+            )}
+            {project.tags && project.tags.length > 0 && (
+              <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">{project.tags[0]}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
