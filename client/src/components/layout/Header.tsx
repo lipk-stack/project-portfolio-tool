@@ -1,7 +1,9 @@
-import { Bell, Search, LogOut, User } from 'lucide-react'
+import { LogOut, User } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
+import GlobalSearch from '../GlobalSearch'
+import NotificationsDropdown from '../NotificationsDropdown'
 
 export default function Header() {
   const user = useAuthStore(s => s.user)
@@ -20,22 +22,12 @@ export default function Header() {
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0 z-20">
       {/* Search */}
       <div className="flex items-center gap-3 flex-1 max-w-md">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search projects, tasks..."
-            className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
-        <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-          <Bell size={18} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <NotificationsDropdown />
 
         <div className="relative">
           <button

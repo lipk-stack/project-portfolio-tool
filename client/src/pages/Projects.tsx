@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown } from 'lucide-react'
-import { projectsApi } from '../api'
+import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, Download } from 'lucide-react'
+import { projectsApi, exportApi } from '../api'
 import { Project } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
@@ -68,9 +68,17 @@ export default function Projects() {
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
           <p className="text-sm text-gray-500 mt-0.5">{stats.active} active · {stats.onTrack} on track · {stats.atRisk} needs attention</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus size={16} /> New Project
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportApi.downloadWithAuth(exportApi.projectsCsv(), 'projects.csv')}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={16} /> New Project
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}

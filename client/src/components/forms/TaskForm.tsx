@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Task } from '../../types'
 import { resourcesApi } from '../../api'
+import CommentsPanel from '../CommentsPanel'
 
 interface TaskFormProps {
   task?: Partial<Task>
@@ -106,6 +107,12 @@ export default function TaskForm({ task, onSubmit, onCancel, loading, defaultSta
           {loading ? 'Saving...' : task?.id ? 'Update Task' : 'Create Task'}
         </button>
       </div>
+
+      {task?.id && (
+        <div className="border-t border-gray-100 pt-4">
+          <CommentsPanel entityType="task" entityId={task.id} />
+        </div>
+      )}
     </form>
   )
 }

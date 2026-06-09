@@ -56,6 +56,11 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
 
   db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', req.params.projectId, req.user!.userId, 'task_created', JSON.stringify({ name }))
 
+  if (assignee_id && assignee_id !== req.user!.userId) {
+    db.prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)')
+      .run(assignee_id, 'assignment', `Assigned to "${name}"`, description || null, `/projects/${req.params.projectId}/tasks`)
+  }
+
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.lastInsertRowid)
   res.status(201).json({ task })
 })
@@ -83,6 +88,11 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
     if (status === 'done') {
       db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', existing.project_id, req.user!.userId, 'task_completed', JSON.stringify({ task: name }))
     }
+  }
+
+  if (assignee_id && existing.assignee_id !== assignee_id && assignee_id !== req.user!.userId) {
+    db.prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)')
+      .run(assignee_id, 'assignment', `Assigned to "${name}"`, null, `/projects/${existing.project_id}/tasks`)
   }
 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)

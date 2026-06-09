@@ -299,8 +299,21 @@ export default function GanttChart({ tasks, onTaskClick, onTaskUpdate, projectSt
                     )
                   }
 
+                  // Baseline rendering (slim gray bar above main bar)
+                  const hasBaseline = task.baseline_start && task.baseline_end
+                  const bx = hasBaseline ? xOf(parseISO(task.baseline_start!)) : 0
+                  const bEndX = hasBaseline ? xOf(addDays(parseISO(task.baseline_end!), 1)) : 0
+                  const bw = hasBaseline ? Math.max(bEndX - bx, 4) : 0
+                  const slipped = hasBaseline && (parseISO(task.end_date).getTime() > parseISO(task.baseline_end!).getTime())
+
                   return (
                     <g key={task.id} className="cursor-pointer" onClick={() => onTaskClick?.(task)}>
+                      {/* Baseline bar */}
+                      {hasBaseline && (
+                        <rect x={bx} y={y - 4} width={bw} height={3} rx={1.5} fill={slipped ? '#fca5a5' : '#cbd5e1'}>
+                          <title>{`Baseline: ${task.baseline_start} → ${task.baseline_end}`}</title>
+                        </rect>
+                      )}
                       {/* Background bar */}
                       <rect x={x} y={y} width={w} height={h} rx={4} ry={4} fill={colors.bar} opacity={0.25} />
                       {/* Progress bar */}

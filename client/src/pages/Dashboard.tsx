@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Minus, FolderOpen, CheckCircle, AlertTriangle, XCircle, DollarSign, Users, Shield, Calendar, Activity, Clock, ArrowRight, LucideIcon } from 'lucide-react'
-import { dashboardApi } from '../api'
+import { dashboardApi, evmApi } from '../api'
 import { DashboardSummary, Milestone, ActivityItem } from '../types'
 import Card from '../components/ui/Card'
 import { HealthDot } from '../components/ui/Badge'
@@ -59,13 +59,19 @@ function getActionText(action: string, details?: string): string {
   } catch { return action }
 }
 
+interface PortfolioEVM {
+  portfolio: { BAC: number; AC: number; EV: number; PV: number; CPI: number; SPI: number }
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null)
+  const [evm, setEvm] = useState<PortfolioEVM | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   useEffect(() => {
     dashboardApi.summary().then(r => setData(r.data)).finally(() => setLoading(false))
+    evmApi.portfolioSummary().then(r => setEvm(r.data)).catch(() => {})
   }, [])
 
   if (loading) return (
@@ -103,6 +109,45 @@ export default function Dashboard() {
         <KPICard title="Budget Used" value={`${kpis.budgetUtilization}%`} subtitle={`${formatCurrency(kpis.totalSpent)} of ${formatCurrency(kpis.totalBudget)}`} icon={DollarSign} color={kpis.budgetUtilization > 90 ? 'bg-red-500' : 'bg-purple-500'} />
         <KPICard title="Open Risks" value={kpis.openRisks} subtitle={`${kpis.highRisks} high severity`} icon={Shield} color={kpis.highRisks > 3 ? 'bg-red-500' : 'bg-orange-500'} trend={kpis.highRisks > 3 ? 'down' : 'neutral'} />
       </div>
+
+      {/* Portfolio EVM strip */}
+      {evm && (
+        <Card padding="md">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-blue-600" />
+              <h3 className="font-semibold text-gray-900">Portfolio Earned Value</h3>
+            </div>
+            <span className="text-xs text-gray-400">PMBOK metrics across all active projects</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <div>
+              <div className="text-xs text-gray-500">BAC</div>
+              <div className="text-lg font-bold text-gray-900">{formatCurrency(evm.portfolio.BAC)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">EV (earned)</div>
+              <div className="text-lg font-bold text-blue-600">{formatCurrency(evm.portfolio.EV)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">PV (planned)</div>
+              <div className="text-lg font-bold text-gray-700">{formatCurrency(evm.portfolio.PV)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">AC (actual)</div>
+              <div className="text-lg font-bold text-gray-700">{formatCurrency(evm.portfolio.AC)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">CPI (cost)</div>
+              <div className={`text-lg font-bold ${evm.portfolio.CPI >= 1 ? 'text-green-600' : evm.portfolio.CPI >= 0.95 ? 'text-yellow-600' : 'text-red-600'}`}>{evm.portfolio.CPI.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500">SPI (schedule)</div>
+              <div className={`text-lg font-bold ${evm.portfolio.SPI >= 1 ? 'text-green-600' : evm.portfolio.SPI >= 0.95 ? 'text-yellow-600' : 'text-red-600'}`}>{evm.portfolio.SPI.toFixed(2)}</div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Main grid */}
       <div className="grid grid-cols-12 gap-6">

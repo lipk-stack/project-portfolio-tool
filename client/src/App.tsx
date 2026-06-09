@@ -9,6 +9,7 @@ import ProjectDetail from './pages/ProjectDetail'
 import Resources from './pages/Resources'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import Calendar from './pages/Calendar'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/:tab" element={<ProjectDetail />} />
+          <Route path="calendar" element={<Calendar />} />
           <Route path="resources" element={<Resources />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />

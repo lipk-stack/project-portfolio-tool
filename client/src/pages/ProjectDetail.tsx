@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, Clock, CheckCircle } from 'lucide-react'
-import { projectsApi, tasksApi, risksApi, budgetApi } from '../api'
+import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText } from 'lucide-react'
+import { projectsApi, tasksApi, risksApi, budgetApi, exportApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
+import EVMDashboard from '../components/EVMDashboard'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
@@ -13,7 +14,7 @@ import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'evm'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -41,6 +42,7 @@ export default function ProjectDetail() {
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [savingTask, setSavingTask] = useState(false)
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus>('todo')
+  const [exportOpen, setExportOpen] = useState(false)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -101,10 +103,16 @@ export default function ProjectDetail() {
     { id: 'overview' as Tab, label: 'Overview', icon: BarChart2 },
     { id: 'tasks' as Tab, label: 'Tasks', icon: List },
     { id: 'gantt' as Tab, label: 'Gantt', icon: GitBranch },
+    { id: 'evm' as Tab, label: 'EVM', icon: TrendingUp },
     { id: 'budget' as Tab, label: 'Budget', icon: DollarSign },
     { id: 'risks' as Tab, label: `Risks (${risks.filter(r => r.status !== 'closed').length})`, icon: AlertTriangle },
     { id: 'team' as Tab, label: 'Team', icon: Users },
   ]
+
+  const exportFile = async (url: string, filename: string) => {
+    await exportApi.downloadWithAuth(url, filename)
+    setExportOpen(false)
+  }
 
   const budgetPct = project.budget > 0 ? Math.round((project.spent / project.budget) * 100) : 0
 
@@ -131,6 +139,34 @@ export default function ProjectDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setExportOpen(o => !o)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+              >
+                <Download size={14} /> Export
+              </button>
+              {exportOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-40 overflow-hidden">
+                    <button onClick={() => exportFile(exportApi.projectTasksCsv(project.id), `tasks-${project.name}.csv`)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                      <FileText size={14} className="text-gray-400" /> Tasks (CSV)
+                    </button>
+                    <button onClick={() => exportFile(exportApi.projectRisksCsv(project.id), `risks-${project.name}.csv`)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                      <FileText size={14} className="text-gray-400" /> Risks (CSV)
+                    </button>
+                    <button onClick={() => exportFile(exportApi.projectBudgetCsv(project.id), `budget-${project.name}.csv`)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                      <FileText size={14} className="text-gray-400" /> Budget (CSV)
+                    </button>
+                    <div className="border-t border-gray-100" />
+                    <button onClick={() => exportFile(exportApi.projectJson(project.id), `project-${project.name}.json`)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                      <FileText size={14} className="text-gray-400" /> Full Project (JSON)
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <div className="text-right">
               <div className="text-2xl font-bold text-gray-900">{project.completion_percent}%</div>
               <div className="text-xs text-gray-400">Complete</div>
@@ -349,6 +385,14 @@ export default function ProjectDetail() {
             projectEnd={project.end_date}
           />
         </div>
+      )}
+
+      {activeTab === 'evm' && (
+        <EVMDashboard
+          projectId={project.id}
+          hasBaseline={!!project.baseline_captured_at}
+          onBaselineChange={loadProject}
+        />
       )}
 
       {activeTab === 'budget' && budget && (

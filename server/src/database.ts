@@ -54,6 +54,10 @@ export function initializeDatabase() {
       completion_percent INTEGER DEFAULT 0,
       budget REAL DEFAULT 0,
       spent REAL DEFAULT 0,
+      baseline_start DATE,
+      baseline_end DATE,
+      baseline_budget REAL,
+      baseline_captured_at DATETIME,
       manager_id INTEGER REFERENCES users(id),
       color TEXT DEFAULT '#3B82F6',
       tags TEXT,
@@ -83,6 +87,9 @@ export function initializeDatabase() {
       end_date DATE,
       actual_start DATE,
       actual_end DATE,
+      baseline_start DATE,
+      baseline_end DATE,
+      baseline_hours REAL,
       estimated_hours REAL DEFAULT 0,
       actual_hours REAL DEFAULT 0,
       completion_percent INTEGER DEFAULT 0,
@@ -172,9 +179,47 @@ export function initializeDatabase() {
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      link TEXT,
+      read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id);
+    CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_entity ON activity_log(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
+    CREATE INDEX IF NOT EXISTS idx_time_user_date ON time_entries(user_id, date);
   `)
 
+  runMigrations()
   seedDatabase()
+}
+
+function runMigrations() {
+  const tableInfo = (table: string) => db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  const hasColumn = (table: string, col: string) => tableInfo(table).some(c => c.name === col)
+
+  const addColumn = (table: string, col: string, type: string) => {
+    if (!hasColumn(table, col)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`)
+    }
+  }
+
+  addColumn('projects', 'baseline_start', 'DATE')
+  addColumn('projects', 'baseline_end', 'DATE')
+  addColumn('projects', 'baseline_budget', 'REAL')
+  addColumn('projects', 'baseline_captured_at', 'DATETIME')
+  addColumn('tasks', 'baseline_start', 'DATE')
+  addColumn('tasks', 'baseline_end', 'DATE')
+  addColumn('tasks', 'baseline_hours', 'REAL')
 }
 
 function seedDatabase() {
@@ -395,6 +440,40 @@ function seedDatabase() {
     [tasks[12], users[7], projects[1], 8, '2026-05-15', 'Data mapping documentation'],
   ]
   db.transaction(() => { for (const t of timeEntries) insertTime.run(...t as Parameters<typeof insertTime.run>) })()
+
+  // Capture baselines on active projects for EVM
+  const captureBaseline = db.prepare(`
+    UPDATE projects SET baseline_start = start_date, baseline_end = end_date,
+      baseline_budget = budget, baseline_captured_at = CURRENT_TIMESTAMP WHERE id = ?
+  `)
+  const captureTaskBaseline = db.prepare(`
+    UPDATE tasks SET baseline_start = start_date, baseline_end = end_date,
+      baseline_hours = estimated_hours WHERE project_id = ?
+  `)
+  db.transaction(() => {
+    for (const pid of projects) {
+      captureBaseline.run(pid)
+      captureTaskBaseline.run(pid)
+    }
+  })()
+
+  // Seed sample comments on a task
+  const insertComment = db.prepare(`INSERT INTO comments (entity_type, entity_id, user_id, content) VALUES (?, ?, ?, ?)`)
+  db.transaction(() => {
+    insertComment.run('task', tasks[2], users[1], 'Frontend dev is progressing well, on track to complete by end of May.')
+    insertComment.run('task', tasks[2], users[3], 'Just finished the dashboard widgets. Moving on to user settings panels.')
+    insertComment.run('task', tasks[3], users[1], 'Payment gateway integration is the critical path here. Need to prioritize.')
+    insertComment.run('task', tasks[21], users[2], 'iOS build passed app store review checks. Beta TestFlight is live.')
+  })()
+
+  // Seed notifications
+  const insertNotification = db.prepare(`INSERT INTO notifications (user_id, type, title, message, link, read) VALUES (?, ?, ?, ?, ?, ?)`)
+  db.transaction(() => {
+    insertNotification.run(users[3], 'assignment', 'Assigned to "Profile & Settings"', 'Due in 3 weeks', `/projects/${projects[0]}/tasks`, 0)
+    insertNotification.run(users[3], 'comment', 'New comment on "Frontend Development"', 'Just finished the dashboard widgets...', `/projects/${projects[0]}/tasks`, 0)
+    insertNotification.run(users[1], 'risk', 'High risk identified: Third-party API instability', 'Score 6 — payment gateway outages', `/projects/${projects[0]}/risks`, 0)
+    insertNotification.run(users[1], 'milestone', 'Milestone approaching: Beta Release', 'Due in 16 days', `/projects/${projects[0]}`, 1)
+  })()
 
   // Activity log
   const insertActivity = db.prepare(`INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)`)

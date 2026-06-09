@@ -97,4 +97,57 @@ export const reportsApi = {
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
 }
 
+export const evmApi = {
+  project: (id: number) => api.get(`/evm/project/${id}`),
+  captureBaseline: (id: number) => api.post(`/evm/project/${id}/baseline`),
+  clearBaseline: (id: number) => api.delete(`/evm/project/${id}/baseline`),
+  portfolioSummary: () => api.get('/evm/portfolio/summary'),
+}
+
+export const searchApi = {
+  query: (q: string) => api.get('/search', { params: { q } }),
+}
+
+export const commentsApi = {
+  list: (entityType: string, entityId: number) => api.get(`/comments/${entityType}/${entityId}`),
+  add: (entityType: string, entityId: number, content: string) => api.post(`/comments/${entityType}/${entityId}`, { content }),
+  delete: (id: number) => api.delete(`/comments/${id}`),
+}
+
+export const notificationsApi = {
+  list: () => api.get('/notifications'),
+  markRead: (id: number) => api.post(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/read-all'),
+}
+
+export const calendarApi = {
+  events: (params?: { from?: string; to?: string; project_id?: number; user_id?: number }) => api.get('/calendar', { params }),
+}
+
+export const exportApi = {
+  projectsCsv: () => '/api/export/projects.csv',
+  projectTasksCsv: (id: number) => `/api/export/projects/${id}/tasks.csv`,
+  projectRisksCsv: (id: number) => `/api/export/projects/${id}/risks.csv`,
+  projectBudgetCsv: (id: number) => `/api/export/projects/${id}/budget.csv`,
+  projectJson: (id: number) => `/api/export/projects/${id}.json`,
+  timeEntriesCsv: (params?: { from?: string; to?: string; user_id?: number; project_id?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.from) q.set('from', params.from)
+    if (params?.to) q.set('to', params.to)
+    if (params?.user_id) q.set('user_id', String(params.user_id))
+    if (params?.project_id) q.set('project_id', String(params.project_id))
+    return `/api/export/time-entries.csv${q.toString() ? '?' + q.toString() : ''}`
+  },
+  downloadWithAuth: async (url: string, filename: string) => {
+    const token = localStorage.getItem('token')
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    const blob = await res.blob()
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(link.href)
+  },
+}
+
 export default api

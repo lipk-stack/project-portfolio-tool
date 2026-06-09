@@ -46,6 +46,10 @@ export interface Project {
   completion_percent: number
   budget: number
   spent: number
+  baseline_start?: string
+  baseline_end?: string
+  baseline_budget?: number
+  baseline_captured_at?: string
   manager_id?: number
   manager_name?: string
   manager_email?: string
@@ -74,6 +78,9 @@ export interface Task {
   end_date?: string
   actual_start?: string
   actual_end?: string
+  baseline_start?: string
+  baseline_end?: string
+  baseline_hours?: number
   estimated_hours: number
   actual_hours: number
   completion_percent: number
@@ -88,6 +95,61 @@ export interface Task {
   dependencies: number[]
   created_at: string
   updated_at: string
+}
+
+export interface EVMMetrics {
+  BAC: number; AC: number; EV: number; PV: number
+  CV: number; SV: number
+  CPI: number; SPI: number
+  EAC: number; ETC: number; VAC: number; TCPI: number
+  scheduleSlipDays: number
+  completionPercent: number
+  plannedPercent: number
+}
+
+export interface EVMResponse {
+  project: { id: number; BAC: number; AC: number; EV: number; PV: number }
+  metrics: EVMMetrics
+  interpretation: { cost: string; schedule: string; health: Health }
+  sCurve: Array<{ date: string; planned: number; earned: number; actual: number }>
+  taskCount: number
+}
+
+export interface Comment {
+  id: number
+  entity_type: string
+  entity_id: number
+  user_id: number
+  user_name: string
+  user_email: string
+  content: string
+  created_at: string
+}
+
+export interface Notification {
+  id: number
+  user_id: number
+  type: string
+  title: string
+  message?: string
+  link?: string
+  read: number
+  created_at: string
+}
+
+export interface CalendarEvent {
+  id: number
+  title: string
+  date: string
+  type: 'task' | 'milestone' | 'project-end'
+  status?: string
+  priority?: string
+  is_critical?: number
+  project_id: number
+  project_name: string
+  color: string
+  assignee_name?: string
+  health?: string
 }
 
 export interface Risk {

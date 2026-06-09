@@ -4,10 +4,10 @@ dist/
 */dist/
 data/
 *.db
+*.db-wal
+*.db-shm
 .env
 .env.local
 *.log
 .DS_Store
-server/dist/
-client/dist/
-node_modules/
+server/public/
