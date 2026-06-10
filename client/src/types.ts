@@ -254,3 +254,45 @@ export interface ProjectMember {
   role: string
   allocation_percent: number
 }
+
+export interface CustomField {
+  id: number
+  project_id: number
+  name: string
+  field_type: 'text' | 'number' | 'select' | 'date'
+  options: string[] | null
+  position: number
+  created_at: string
+}
+
+export interface ApiToken {
+  id: number
+  name: string
+  prefix: string
+  last_used_at?: string
+  created_at: string
+}
+
+export interface ScenarioTaskResult {
+  id: number
+  name: string
+  old_start: string | null
+  old_end: string | null
+  new_start: string | null
+  new_end: string | null
+  delta_days: number
+  changed: boolean
+  directly_changed: boolean
+}
+
+export interface ScenarioResult {
+  tasks: ScenarioTaskResult[]
+  summary: {
+    old_end: string | null
+    new_end: string | null
+    end_delta_days: number
+    old_cost: number
+    new_cost: number
+    cost_delta: number
+  }
+}

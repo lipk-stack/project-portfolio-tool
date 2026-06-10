@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { portfoliosApi, projectsApi, budgetApi } from '../api'
+import { portfoliosApi, projectsApi, budgetApi, reportsApi, exportApi } from '../api'
 import { Portfolio as PortfolioType, Project } from '../types'
 import { HealthBadge, PriorityBadge, HealthDot } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Card from '../components/ui/Card'
 import { format, parseISO } from 'date-fns'
-import { TrendingUp, DollarSign, FolderOpen, Target, BarChart3, AlertTriangle, LucideIcon } from 'lucide-react'
+import { TrendingUp, DollarSign, FolderOpen, Target, BarChart3, AlertTriangle, LucideIcon, FileText, ChevronDown } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 
 function formatCurrency(n: number): string {
@@ -24,7 +24,13 @@ export default function Portfolio() {
   const [projects, setProjects] = useState<Project[]>([])
   const [budgetData, setBudgetData] = useState<{ overview: Array<{ id: number; name: string; budget: number; spent: number; health: string; color: string; completion_percent: number }> } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [briefingOpen, setBriefingOpen] = useState(false)
   const navigate = useNavigate()
+
+  const downloadBriefing = async (id: number | 'all', name: string) => {
+    await exportApi.downloadWithAuth(reportsApi.portfolioPdfUrl(id), `briefing-${name}.pdf`)
+    setBriefingOpen(false)
+  }
 
   useEffect(() => {
     Promise.all([
@@ -72,9 +78,42 @@ export default function Portfolio() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Portfolio Overview</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{portfolios.length} portfolios · {projects.length} projects</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Portfolio Overview</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{portfolios.length} portfolios · {projects.length} projects</p>
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setBriefingOpen(o => !o)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 bg-white"
+          >
+            <FileText size={14} /> Briefing PDF <ChevronDown size={12} />
+          </button>
+          {briefingOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setBriefingOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-40 overflow-hidden">
+                <button
+                  onClick={() => downloadBriefing('all', 'All Portfolios')}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 text-left"
+                >
+                  <FileText size={14} /> All Portfolios
+                </button>
+                <div className="border-t border-gray-100" />
+                {portfolios.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => downloadBriefing(p.id, p.name)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <FileText size={14} className="text-gray-400" /> {p.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Portfolio KPIs */}

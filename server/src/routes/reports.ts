@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
 import { buildStatusPdf } from '../lib/statusPdf'
+import { buildPortfolioPdf } from '../lib/portfolioPdf'
 
 const router = Router()
 
@@ -10,6 +11,16 @@ router.get('/project/:id/status.pdf', authenticate, (req: Request, res: Response
   if (!doc) return res.status(404).json({ error: 'Project not found' })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="project-${req.params.id}-status.pdf"`)
+  doc.pipe(res)
+})
+
+router.get('/portfolio/:id/briefing.pdf', authenticate, (req: Request, res: Response) => {
+  const portfolioId = req.params.id === 'all' ? null : Number(req.params.id)
+  if (portfolioId !== null && !Number.isFinite(portfolioId)) return res.status(400).json({ error: 'Invalid portfolio id' })
+  const doc = buildPortfolioPdf(portfolioId)
+  if (!doc) return res.status(404).json({ error: 'Portfolio not found' })
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="portfolio-${req.params.id}-briefing.pdf"`)
   doc.pipe(res)
 })
 

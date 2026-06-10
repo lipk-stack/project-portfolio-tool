@@ -107,6 +107,10 @@ The backend exposes a comprehensive REST API. Highlights:
 - `GET /api/resources/capacity-forecast?weeks=12` — Per-resource weekly load forecast
 - `GET /api/budget/project/:id/cashflow` — Monthly planned vs actual spend
 - `GET /api/export/projects.csv`, `/api/export/projects/:id/tasks.csv`, `/api/export/projects/:id/risks.csv`, `/api/export/projects/:id/budget.csv`, `/api/export/projects/:id.json`, `/api/export/time-entries.csv`
+- `GET /api/custom-fields/project/:id` — Per-project custom field definitions (`POST` to create; values ride along on task create/update via `custom_values`)
+- `POST /api/scenario/project/:id/simulate` — What-if schedule simulation (shifts/extensions ripple through dependencies; nothing persisted)
+- `GET /api/reports/portfolio/:id/briefing.pdf` — Multi-project executive briefing (`:id` or `all`)
+- `GET /api/tokens` — Personal access tokens (`POST` to create, `DELETE /:id` to revoke); use `Authorization: Bearer ppt_...` for external integrations
 
 ## Testing
 
@@ -135,6 +139,9 @@ npm test   # Vitest unit tests (agile math: burndown, velocity)
 | PDF Status Reports | ✅ | ✅ | ⚠️ Paid | ⚠️ Paid |
 | Workflow Automations | ✅ | ❌ | ✅ | ✅ |
 | Saved Views | ✅ | ⚠️ | ✅ | ✅ |
+| Custom Fields | ✅ | ✅ | ✅ | ⚠️ Paid |
+| What-If Scenario Planning | ✅ | ⚠️ Paid tier | ❌ | ❌ |
+| API Access Tokens | ✅ | ⚠️ | ✅ | ✅ |
 | Self-Hosted | ✅ | ❌ | ✅ | ❌ |
 | Free | ✅ | ❌ | ⚠️ Limited | ⚠️ Limited |
 
@@ -143,12 +150,11 @@ npm test   # Vitest unit tests (agile math: burndown, velocity)
 Completed in iteration 1: EVM, baseline, CSV/JSON export, calendar, global search, comments, notifications.
 Completed in iteration 2: sprints/agile (burndown, velocity), capacity forecast, time-phased cash flow.
 Completed in iteration 3: PDF executive reports, workflow automation rules engine, saved views, route-based code splitting.
+Completed in iteration 4: custom fields, what-if scenario planning, portfolio briefing PDF, personal API tokens.
 
 Planned for upcoming iterations:
 - [ ] Real-time collaboration (WebSockets)
 - [ ] Email & in-app webhook notifications
-- [ ] Custom fields (text/number/select/date on tasks & projects)
-- [ ] What-if scenario planning (schedule simulation)
 - [ ] Integrations (Jira, GitHub, Slack, MS Teams, Outlook)
 - [ ] Mobile app (React Native)
 - [ ] AI-powered risk prediction & status auto-summary

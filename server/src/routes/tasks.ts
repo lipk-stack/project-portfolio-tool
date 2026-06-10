@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
 import { runAutomations } from '../lib/automationRunner'
+import { saveCustomValues } from './customFields'
 
 const router = Router()
 
@@ -64,6 +65,11 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
 
   const taskId = Number(result.lastInsertRowid)
   const projectId = Number(req.params.projectId)
+
+  if (req.body.custom_values && typeof req.body.custom_values === 'object') {
+    saveCustomValues(taskId, projectId, req.body.custom_values)
+  }
+
   const eventTask = { id: taskId, name, status: status || 'todo', priority: priority || 'medium', assignee_id: assignee_id || null }
   runAutomations({ type: 'task_created', projectId, task: eventTask }, req.user!.userId)
   if (assignee_id) {
@@ -105,6 +111,11 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   }
 
   const projectId = Number(existing.project_id)
+
+  if (req.body.custom_values && typeof req.body.custom_values === 'object') {
+    saveCustomValues(Number(req.params.id), projectId, req.body.custom_values)
+  }
+
   const eventTask = { id: Number(req.params.id), name, status, priority, assignee_id: assignee_id || null, from_status: existing.status as string }
   if (existing.status !== status) {
     runAutomations({ type: 'task_status_changed', projectId, task: eventTask }, req.user!.userId)

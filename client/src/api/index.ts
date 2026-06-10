@@ -98,6 +98,26 @@ export const reportsApi = {
   resourceUtilization: () => api.get('/reports/resource-utilization'),
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
   statusPdfUrl: (projectId: number) => `/api/reports/project/${projectId}/status.pdf`,
+  portfolioPdfUrl: (portfolioId: number | 'all') => `/api/reports/portfolio/${portfolioId}/briefing.pdf`,
+}
+
+export const customFieldsApi = {
+  list: (projectId: number) => api.get(`/custom-fields/project/${projectId}`),
+  create: (projectId: number, data: { name: string; field_type: string; options?: string[] }) => api.post(`/custom-fields/project/${projectId}`, data),
+  update: (id: number, data: object) => api.put(`/custom-fields/${id}`, data),
+  delete: (id: number) => api.delete(`/custom-fields/${id}`),
+  taskValues: (taskId: number) => api.get(`/custom-fields/task/${taskId}`),
+}
+
+export const scenarioApi = {
+  simulate: (projectId: number, changes: Array<{ task_id: number; shift_days?: number; duration_delta_days?: number }>) =>
+    api.post(`/scenario/project/${projectId}/simulate`, { changes }),
+}
+
+export const tokensApi = {
+  list: () => api.get('/tokens'),
+  create: (name: string) => api.post('/tokens', { name }),
+  revoke: (id: number) => api.delete(`/tokens/${id}`),
 }
 
 export const automationsApi = {

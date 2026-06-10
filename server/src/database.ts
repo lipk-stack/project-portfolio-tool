@@ -228,6 +228,35 @@ export function initializeDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS custom_fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      field_type TEXT NOT NULL DEFAULT 'text',
+      options TEXT,
+      position INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_field_values (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      field_id INTEGER NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      value TEXT,
+      UNIQUE(field_id, task_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      prefix TEXT NOT NULL,
+      revoked INTEGER DEFAULT 0,
+      last_used_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id);
     CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
@@ -263,6 +292,9 @@ function runMigrations() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_saved_views_user ON saved_views(user_id, page)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_automation_rules_project ON automation_rules(project_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_automation_rules_trigger ON automation_rules(trigger_type, enabled)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_custom_fields_project ON custom_fields(project_id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_custom_field_values_task ON custom_field_values(task_id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)')
 }
 
 function seedDatabase() {
@@ -563,6 +595,18 @@ function seedDatabase() {
     insertActivity.run('project', projects[2], users[7], 'task_completed', JSON.stringify({ task: 'Data Ingestion Pipeline' }))
     insertActivity.run('project', projects[0], users[1], 'budget_updated', JSON.stringify({ note: 'Approved additional $20k for performance optimization' }))
     insertActivity.run('project', projects[3], users[2], 'health_changed', JSON.stringify({ from: 'yellow', to: 'red', reason: 'Budget overrun risk' }))
+  })()
+
+  // Custom fields for Customer Portal project
+  const insertField = db.prepare(`INSERT INTO custom_fields (project_id, name, field_type, options, position) VALUES (?, ?, ?, ?, ?)`)
+  const insertFieldValue = db.prepare(`INSERT INTO custom_field_values (field_id, task_id, value) VALUES (?, ?, ?)`)
+  db.transaction(() => {
+    const envField = insertField.run(projects[0], 'Environment', 'select', JSON.stringify(['Dev', 'Staging', 'Production']), 0).lastInsertRowid as number
+    const reviewField = insertField.run(projects[0], 'Code Review Link', 'text', null, 1).lastInsertRowid as number
+    insertField.run(projects[0], 'Release Date', 'date', null, 2)
+    insertFieldValue.run(envField, tasks[2], 'Staging')
+    insertFieldValue.run(envField, tasks[3], 'Dev')
+    insertFieldValue.run(reviewField, tasks[3], 'https://github.com/acme/portal/pull/214')
   })()
 
   // Automation rules

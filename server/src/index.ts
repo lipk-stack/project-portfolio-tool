@@ -23,6 +23,9 @@ import calendarRoutes from './routes/calendar'
 import sprintsRoutes from './routes/sprints'
 import automationsRoutes from './routes/automations'
 import viewsRoutes from './routes/views'
+import customFieldsRoutes from './routes/customFields'
+import scenarioRoutes from './routes/scenario'
+import tokensRoutes from './routes/tokens'
 
 initializeDatabase()
 
@@ -61,6 +64,9 @@ app.use('/api/calendar', calendarRoutes)
 app.use('/api/sprints', sprintsRoutes)
 app.use('/api/automations', automationsRoutes)
 app.use('/api/views', viewsRoutes)
+app.use('/api/custom-fields', customFieldsRoutes)
+app.use('/api/scenario', scenarioRoutes)
+app.use('/api/tokens', tokensRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

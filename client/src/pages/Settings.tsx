@@ -1,12 +1,52 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store'
 import Card from '../components/ui/Card'
-import { User, Shield, Bell, Palette, Database, Key } from 'lucide-react'
+import { User, Bell, Database, Key, Plug, Plus, Trash2, Copy, Check } from 'lucide-react'
 import Avatar from '../components/ui/Avatar'
+import { tokensApi } from '../api'
+import { ApiToken } from '../types'
+import { format } from 'date-fns'
+
+// SQLite DATETIME is 'YYYY-MM-DD HH:MM:SS' (UTC, space-separated)
+const fmtSqlDate = (s: string) => format(new Date(s.replace(' ', 'T') + 'Z'), 'MMM d, yyyy')
 
 export default function Settings() {
   const user = useAuthStore(s => s.user)
   const [saved, setSaved] = useState(false)
+  const [tokens, setTokens] = useState<ApiToken[]>([])
+  const [tokenName, setTokenName] = useState('')
+  const [newToken, setNewToken] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    tokensApi.list().then(r => setTokens(r.data.tokens)).catch(() => {})
+  }, [])
+
+  const createToken = async () => {
+    if (!tokenName.trim()) return
+    setCreating(true)
+    try {
+      const res = await tokensApi.create(tokenName.trim())
+      setNewToken(res.data.token)
+      setTokenName('')
+      const list = await tokensApi.list()
+      setTokens(list.data.tokens)
+    } finally { setCreating(false) }
+  }
+
+  const revokeToken = async (id: number) => {
+    if (!confirm('Revoke this token? Integrations using it will stop working.')) return
+    await tokensApi.revoke(id)
+    setTokens(prev => prev.filter(t => t.id !== id))
+  }
+
+  const copyToken = () => {
+    if (!newToken) return
+    navigator.clipboard.writeText(newToken)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const handleSave = () => {
     setSaved(true)
@@ -115,6 +155,66 @@ export default function Settings() {
               </label>
             </div>
           ))}
+        </div>
+      </Card>
+
+      {/* API Tokens */}
+      <Card>
+        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+          <Plug size={18} className="text-blue-600" />
+          <h2 className="font-semibold text-gray-900">API Tokens</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Personal access tokens let external tools call the ProjectPulse API on your behalf.
+          Send them as <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">Authorization: Bearer ppt_...</code>
+        </p>
+
+        {newToken && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="text-xs font-medium text-green-800 mb-1.5">Token created — copy it now, it won't be shown again:</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs bg-white border border-green-200 rounded px-2 py-1.5 font-mono break-all">{newToken}</code>
+              <button onClick={copyToken} className="p-1.5 text-green-700 hover:bg-green-100 rounded" title="Copy">
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2 mb-4">
+          {tokens.map(t => (
+            <div key={t.id} className="flex items-center gap-3 border border-gray-200 rounded-lg px-3 py-2">
+              <Key size={14} className="text-gray-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-800">{t.name}</div>
+                <div className="text-xs text-gray-400 font-mono">
+                  {t.prefix}··· · created {fmtSqlDate(t.created_at)}
+                  {t.last_used_at && ` · last used ${fmtSqlDate(t.last_used_at)}`}
+                </div>
+              </div>
+              <button onClick={() => revokeToken(t.id)} className="p-1 text-gray-400 hover:text-red-500" title="Revoke">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          {tokens.length === 0 && <div className="text-sm text-gray-400 text-center py-3">No active tokens</div>}
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={tokenName}
+            onChange={e => setTokenName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createToken()}
+            placeholder="Token name (e.g. CI pipeline)"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={createToken}
+            disabled={creating || !tokenName.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Plus size={14} /> Create
+          </button>
         </div>
       </Card>
 

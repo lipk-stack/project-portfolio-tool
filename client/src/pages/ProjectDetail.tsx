@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import EVMDashboard from '../components/EVMDashboard'
+import ScenarioPlanner from '../components/ScenarioPlanner'
+import CustomFieldsManager from '../components/CustomFieldsManager'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
@@ -14,7 +16,7 @@ import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'evm'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'evm' | 'scenario'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -43,6 +45,7 @@ export default function ProjectDetail() {
   const [savingTask, setSavingTask] = useState(false)
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus>('todo')
   const [exportOpen, setExportOpen] = useState(false)
+  const [showFieldsManager, setShowFieldsManager] = useState(false)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -104,6 +107,7 @@ export default function ProjectDetail() {
     { id: 'tasks' as Tab, label: 'Tasks', icon: List },
     { id: 'gantt' as Tab, label: 'Gantt', icon: GitBranch },
     { id: 'evm' as Tab, label: 'EVM', icon: TrendingUp },
+    { id: 'scenario' as Tab, label: 'Scenario', icon: FlaskConical },
     { id: 'budget' as Tab, label: 'Budget', icon: DollarSign },
     { id: 'risks' as Tab, label: `Risks (${risks.filter(r => r.status !== 'closed').length})`, icon: AlertTriangle },
     { id: 'team' as Tab, label: 'Team', icon: Users },
@@ -309,12 +313,20 @@ export default function ProjectDetail() {
                 <List size={14} /> List
               </button>
             </div>
-            <button
-              onClick={() => { setEditTask(null); setShowTaskForm(true) }}
-              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-            >
-              <Plus size={14} /> Add Task
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowFieldsManager(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+              >
+                <SlidersHorizontal size={14} /> Fields
+              </button>
+              <button
+                onClick={() => { setEditTask(null); setShowTaskForm(true) }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+              >
+                <Plus size={14} /> Add Task
+              </button>
+            </div>
           </div>
 
           {taskView === 'kanban' ? (
@@ -397,6 +409,10 @@ export default function ProjectDetail() {
           hasBaseline={!!project.baseline_captured_at}
           onBaselineChange={loadProject}
         />
+      )}
+
+      {activeTab === 'scenario' && (
+        <ScenarioPlanner projectId={project.id} tasks={tasks} />
       )}
 
       {activeTab === 'budget' && budget && (
@@ -542,11 +558,22 @@ export default function ProjectDetail() {
       >
         <TaskForm
           task={editTask || undefined}
+          projectId={project.id}
           defaultStatus={defaultTaskStatus}
           onSubmit={handleTaskSave}
           onCancel={() => { setShowTaskForm(false); setEditTask(null) }}
           loading={savingTask}
         />
+      </Modal>
+
+      {/* Custom fields manager modal */}
+      <Modal
+        isOpen={showFieldsManager}
+        onClose={() => setShowFieldsManager(false)}
+        title="Custom Fields"
+        size="md"
+      >
+        <CustomFieldsManager projectId={project.id} />
       </Modal>
     </div>
   )
