@@ -15,8 +15,11 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Global Search (⌘K)** | Instant unified search across projects, tasks, risks, portfolios, and people |
 | **Comments** | Threaded comments on tasks with @assignee notifications |
 | **Notifications Center** | Bell dropdown with assignment, comment, risk, and milestone alerts; mark read/all-read |
+| **Sprints / Agile** | Sprint planning with backlog grooming, story points, burndown chart, committed-vs-completed velocity |
 | **Resource Management** | Utilization heatmap, allocation matrix, overallocation alerts |
+| **Capacity Forecast** | 12-week look-ahead heatmap per resource from remaining task estimates; overdue work auto re-planned |
 | **Budget Tracking** | Planned vs actual by category, spend rate, EVM-style charts |
+| **Cash Flow** | Time-phased budget: monthly planned vs actual spend with cumulative curves |
 | **Risk Register** | Probability/impact matrix, severity scoring, mitigation plans |
 | **Export** | One-click CSV export of projects/tasks/risks/budget/time-entries, full project as JSON |
 | **Analytics & Reports** | Portfolio performance, task velocity, hours logged, department utilization |
@@ -95,7 +98,18 @@ The backend exposes a comprehensive REST API. Highlights:
 - `GET /api/calendar?from=&to=` — All scheduled events for date range
 - `GET /api/notifications` — Per-user notification feed
 - `GET /api/comments/:entityType/:entityId` — Threaded comments
+- `GET /api/sprints/project/:id` — Sprints with point rollups (`POST` to create; `PUT/DELETE /api/sprints/:id`)
+- `GET /api/sprints/:id/burndown` — Daily ideal vs actual remaining points
+- `GET /api/sprints/project/:id/velocity` — Committed vs completed points per sprint
+- `GET /api/resources/capacity-forecast?weeks=12` — Per-resource weekly load forecast
+- `GET /api/budget/project/:id/cashflow` — Monthly planned vs actual spend
 - `GET /api/export/projects.csv`, `/api/export/projects/:id/tasks.csv`, `/api/export/projects/:id/risks.csv`, `/api/export/projects/:id/budget.csv`, `/api/export/projects/:id.json`, `/api/export/time-entries.csv`
+
+## Testing
+
+```bash
+npm test   # Vitest unit tests (agile math: burndown, velocity)
+```
 
 ## Comparison with Industry Leaders
 
@@ -126,10 +140,7 @@ Planned for upcoming iterations:
 - [ ] Real-time collaboration (WebSockets)
 - [ ] PDF reports (executive briefing pack)
 - [ ] Email & in-app webhook notifications
-- [ ] Resource capacity forecasting (look-ahead heatmap)
 - [ ] Custom fields & saved views
-- [ ] Sprint board / Agile burndown
-- [ ] Time-phased budget (cost loading)
 - [ ] What-if scenario planning (schedule simulation)
 - [ ] Workflow automation & rules engine
 - [ ] Integrations (Jira, GitHub, Slack, MS Teams, Outlook)

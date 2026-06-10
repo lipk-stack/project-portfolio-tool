@@ -7,6 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, PieChart, Pie, Legend, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis
 } from 'recharts'
+import CashFlowChart from '../components/CashFlowChart'
 
 interface ReportData {
   projectsByStatus: Array<{ status: string; count: number }>
@@ -195,6 +196,7 @@ export default function Reports() {
           </ResponsiveContainer>
         </Card>
       )}
+      <CashFlowChart />
     </div>
   )
 }

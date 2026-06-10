@@ -71,6 +71,7 @@ export const resourcesApi = {
   list: () => api.get('/resources'),
   allocationMatrix: () => api.get('/resources/allocation-matrix'),
   utilization: () => api.get('/resources/utilization'),
+  capacityForecast: (weeks = 12) => api.get('/resources/capacity-forecast', { params: { weeks } }),
   users: () => api.get('/resources/users'),
   getUser: (id: number) => api.get(`/resources/users/${id}`),
 }
@@ -85,6 +86,7 @@ export const risksApi = {
 
 export const budgetApi = {
   get: (projectId: number) => api.get(`/budget/project/${projectId}`),
+  cashflow: (projectId: number) => api.get(`/budget/project/${projectId}/cashflow`),
   createLine: (projectId: number, data: object) => api.post(`/budget/project/${projectId}/lines`, data),
   updateLine: (id: number, data: object) => api.put(`/budget/lines/${id}`, data),
   deleteLine: (id: number) => api.delete(`/budget/lines/${id}`),
@@ -102,6 +104,17 @@ export const evmApi = {
   captureBaseline: (id: number) => api.post(`/evm/project/${id}/baseline`),
   clearBaseline: (id: number) => api.delete(`/evm/project/${id}/baseline`),
   portfolioSummary: () => api.get('/evm/portfolio/summary'),
+}
+
+export const sprintsApi = {
+  list: (projectId: number) => api.get(`/sprints/project/${projectId}`),
+  create: (projectId: number, data: object) => api.post(`/sprints/project/${projectId}`, data),
+  update: (id: number, data: object) => api.put(`/sprints/${id}`, data),
+  delete: (id: number) => api.delete(`/sprints/${id}`),
+  assignTasks: (id: number, taskIds: number[]) => api.post(`/sprints/${id}/tasks`, { task_ids: taskIds }),
+  unassignTask: (taskId: number) => api.delete(`/sprints/tasks/${taskId}`),
+  burndown: (id: number) => api.get(`/sprints/${id}/burndown`),
+  velocity: (projectId: number) => api.get(`/sprints/project/${projectId}/velocity`),
 }
 
 export const searchApi = {

@@ -74,6 +74,17 @@ export function initializeDatabase() {
       description TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS sprints (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      goal TEXT,
+      start_date DATE,
+      end_date DATE,
+      status TEXT DEFAULT 'planned',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
@@ -97,6 +108,7 @@ export function initializeDatabase() {
       is_critical INTEGER DEFAULT 0,
       position INTEGER DEFAULT 0,
       sprint TEXT,
+      sprint_id INTEGER REFERENCES sprints(id),
       story_points INTEGER,
       tags TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -220,6 +232,9 @@ function runMigrations() {
   addColumn('tasks', 'baseline_start', 'DATE')
   addColumn('tasks', 'baseline_end', 'DATE')
   addColumn('tasks', 'baseline_hours', 'REAL')
+  addColumn('tasks', 'sprint_id', 'INTEGER REFERENCES sprints(id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(project_id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_sprint ON tasks(sprint_id)')
 }
 
 function seedDatabase() {
@@ -456,6 +471,41 @@ function seedDatabase() {
       captureTaskBaseline.run(pid)
     }
   })()
+
+  // Sprints for Project 1 (Customer Portal), anchored to today so the demo stays live
+  const addDays = (n: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + n)
+    return d.toISOString().slice(0, 10)
+  }
+  const insertSprint = db.prepare(`INSERT INTO sprints (project_id, name, goal, start_date, end_date, status) VALUES (?, ?, ?, ?, ?, ?)`)
+  const sprint1 = insertSprint.run(projects[0], 'Sprint 1 — Foundation', 'Component library and auth flows', addDays(-42), addDays(-29), 'completed').lastInsertRowid as number
+  const sprint2 = insertSprint.run(projects[0], 'Sprint 2 — Dashboard', 'Dashboard views and data wiring', addDays(-28), addDays(-15), 'completed').lastInsertRowid as number
+  const sprint3 = insertSprint.run(projects[0], 'Sprint 3 — Settings & Polish', 'Profile, settings, notifications UI', addDays(-3), addDays(10), 'active').lastInsertRowid as number
+
+  const assignSprint = db.prepare('UPDATE tasks SET sprint_id = ?, actual_end = COALESCE(?, actual_end) WHERE id = ?')
+  const sprintTasks = db.transaction(() => {
+    // Completed sprint 1: Component Library (13pts) + User Auth Flow (8pts)
+    assignSprint.run(sprint1, addDays(-31), tasks[6])
+    assignSprint.run(sprint1, addDays(-35), tasks[8])
+    // Sprint 2: Dashboard Views (21pts, still in progress) + a finished API task
+    assignSprint.run(sprint2, null, tasks[7])
+    const apiTask = insertTask.run(projects[0], null, 'API Client Layer', 'done', 'high', users[3], addDays(-28), addDays(-18), 60, 58, 100, '3.5', 0, 10, 8).lastInsertRowid as number
+    assignSprint.run(sprint2, addDays(-18), apiTask)
+    // Active sprint 3
+    assignSprint.run(sprint3, null, tasks[9])
+    const notifTask = insertTask.run(projects[0], null, 'Notifications UI', 'in_progress', 'medium', users[4], addDays(-3), addDays(8), 40, 12, 30, '3.6', 0, 11, 5).lastInsertRowid as number
+    assignSprint.run(sprint3, null, notifTask)
+    const settingsApi = insertTask.run(projects[0], null, 'Settings API Wiring', 'done', 'medium', users[3], addDays(-3), addDays(-1), 24, 22, 100, '3.7', 0, 12, 3).lastInsertRowid as number
+    assignSprint.run(sprint3, addDays(-1), settingsApi)
+    const a11y = insertTask.run(projects[0], null, 'Empty States & A11y Pass', 'todo', 'low', users[8], addDays(2), addDays(9), 16, 0, 0, '3.8', 0, 13, 2).lastInsertRowid as number
+    assignSprint.run(sprint3, null, a11y)
+    // Backlog (no sprint)
+    insertTask.run(projects[0], null, 'Performance Tuning', 'todo', 'medium', users[3], null, null, 40, 0, 0, '7.1', 0, 14, 8)
+    insertTask.run(projects[0], null, 'Search Filters', 'todo', 'medium', users[3], null, null, 24, 0, 0, '7.2', 0, 15, 5)
+    insertTask.run(projects[0], null, 'Onboarding Tour', 'todo', 'low', users[4], null, null, 16, 0, 0, '7.3', 0, 16, 3)
+  })
+  sprintTasks()
 
   // Seed sample comments on a task
   const insertComment = db.prepare(`INSERT INTO comments (entity_type, entity_id, user_id, content) VALUES (?, ?, ?, ?)`)

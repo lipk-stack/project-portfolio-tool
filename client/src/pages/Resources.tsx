@@ -6,6 +6,7 @@ import Progress from '../components/ui/Progress'
 import Avatar from '../components/ui/Avatar'
 import { Users, TrendingUp, AlertTriangle, Clock, LucideIcon } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis } from 'recharts'
+import CapacityForecast from '../components/CapacityForecast'
 
 export default function Resources() {
   const [resources, setResources] = useState<ResourceSummary[]>([])
@@ -201,6 +202,7 @@ export default function Resources() {
           </div>
         </Card>
       )}
+      <CapacityForecast />
     </div>
   )
 }

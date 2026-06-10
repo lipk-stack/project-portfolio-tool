@@ -20,6 +20,7 @@ import searchRoutes from './routes/search'
 import commentsRoutes from './routes/comments'
 import notificationsRoutes from './routes/notifications'
 import calendarRoutes from './routes/calendar'
+import sprintsRoutes from './routes/sprints'
 
 initializeDatabase()
 
@@ -55,6 +56,7 @@ app.use('/api/search', searchRoutes)
 app.use('/api/comments', commentsRoutes)
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/calendar', calendarRoutes)
+app.use('/api/sprints', sprintsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

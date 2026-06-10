@@ -70,6 +70,82 @@ router.get('/utilization', authenticate, (_req: Request, res: Response) => {
   res.json({ utilization })
 })
 
+router.get('/capacity-forecast', authenticate, (req: Request, res: Response) => {
+  const numWeeks = Math.min(Math.max(parseInt(String(req.query.weeks || '12'), 10) || 12, 4), 26)
+
+  // Build week buckets starting from this week's Monday
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const monday = new Date(today)
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  const weeks: string[] = []
+  for (let i = 0; i < numWeeks; i++) {
+    const w = new Date(monday)
+    w.setDate(w.getDate() + i * 7)
+    weeks.push(w.toISOString().slice(0, 10))
+  }
+  const horizonEnd = new Date(monday)
+  horizonEnd.setDate(horizonEnd.getDate() + numWeeks * 7)
+
+  const users = db.prepare(`
+    SELECT id, name, department, capacity FROM users WHERE role != 'admin' ORDER BY name
+  `).all() as Array<{ id: number; name: string; department: string; capacity: number }>
+
+  const tasks = db.prepare(`
+    SELECT t.assignee_id, t.start_date, t.end_date, t.estimated_hours, t.completion_percent
+    FROM tasks t JOIN projects p ON p.id = t.project_id
+    WHERE t.status != 'done' AND t.assignee_id IS NOT NULL
+      AND t.end_date IS NOT NULL AND p.status = 'active'
+  `).all() as Array<{ assignee_id: number; start_date: string | null; end_date: string; estimated_hours: number; completion_percent: number }>
+
+  // hours[userId][weekStart] = forecast hours
+  const hours: Record<number, Record<string, number>> = {}
+  const weekKey = (d: Date) => {
+    const m = new Date(d)
+    m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
+    return m.toISOString().slice(0, 10)
+  }
+
+  for (const t of tasks) {
+    const remaining = Math.max(0, (t.estimated_hours || 0) * (1 - (t.completion_percent || 0) / 100))
+    if (remaining === 0) continue
+
+    let rangeStart = t.start_date ? new Date(t.start_date) : new Date(today)
+    if (rangeStart < today) rangeStart = new Date(today)
+    let rangeEnd = new Date(t.end_date)
+    if (rangeEnd < rangeStart) {
+      // Overdue: assume work is re-planned across the next 4 weeks
+      rangeEnd = new Date(rangeStart)
+      rangeEnd.setDate(rangeEnd.getDate() + 27)
+    }
+
+    // Count weekdays in range, spread remaining hours evenly across them
+    const weekdays: Date[] = []
+    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== 0 && d.getDay() !== 6) weekdays.push(new Date(d))
+    }
+    if (weekdays.length === 0) weekdays.push(new Date(rangeStart))
+    const perDay = remaining / weekdays.length
+
+    if (!hours[t.assignee_id]) hours[t.assignee_id] = {}
+    for (const d of weekdays) {
+      if (d >= horizonEnd) break
+      const wk = weekKey(d)
+      hours[t.assignee_id][wk] = (hours[t.assignee_id][wk] || 0) + perDay
+    }
+  }
+
+  const forecast = users.map(u => ({
+    ...u,
+    weekly: weeks.map(w => {
+      const h = Math.round((hours[u.id]?.[w] || 0) * 10) / 10
+      return { week: w, hours: h, pct: u.capacity > 0 ? Math.round((h / u.capacity) * 100) : 0 }
+    }),
+  }))
+
+  res.json({ weeks, forecast })
+})
+
 router.get('/users', authenticate, (_req: Request, res: Response) => {
   const users = db.prepare('SELECT id, name, email, role, department, capacity, hourly_rate FROM users ORDER BY name').all()
   res.json({ users })
