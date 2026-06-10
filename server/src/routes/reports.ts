@@ -1,8 +1,17 @@
 import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
+import { buildStatusPdf } from '../lib/statusPdf'
 
 const router = Router()
+
+router.get('/project/:id/status.pdf', authenticate, (req: Request, res: Response) => {
+  const doc = buildStatusPdf(Number(req.params.id))
+  if (!doc) return res.status(404).json({ error: 'Project not found' })
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="project-${req.params.id}-status.pdf"`)
+  doc.pipe(res)
+})
 
 router.get('/overview', authenticate, (_req: Request, res: Response) => {
   const projectsByStatus = db.prepare(`

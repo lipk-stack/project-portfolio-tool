@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
+import { runAutomations } from '../lib/automationRunner'
 
 const router = Router()
 
@@ -32,6 +33,12 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
 
   db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', req.params.projectId, req.user!.userId, 'risk_raised', JSON.stringify({ title }))
 
+  runAutomations({
+    type: 'risk_created',
+    projectId: Number(req.params.projectId),
+    risk: { id: Number(result.lastInsertRowid), title, score, status: status || 'open' },
+  }, req.user!.userId)
+
   const risk = db.prepare('SELECT * FROM risks WHERE id = ?').get(result.lastInsertRowid)
   res.status(201).json({ risk })
 })
@@ -45,7 +52,14 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
     WHERE id=?
   `).run(title, description || null, category, probability, impact, score, status, response || null, mitigation_plan || null, owner_id || null, identified_date, target_date || null, req.params.id)
 
-  const risk = db.prepare('SELECT * FROM risks WHERE id = ?').get(req.params.id)
+  const risk = db.prepare('SELECT * FROM risks WHERE id = ?').get(req.params.id) as { project_id: number } | undefined
+  if (risk) {
+    runAutomations({
+      type: 'risk_updated',
+      projectId: risk.project_id,
+      risk: { id: Number(req.params.id), title, score, status },
+    }, req.user!.userId)
+  }
   res.json({ risk })
 })
 

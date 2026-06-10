@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText } from 'lucide-react'
-import { projectsApi, tasksApi, risksApi, budgetApi, exportApi } from '../api'
+import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi } from '../api'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import EVMDashboard from '../components/EVMDashboard'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
@@ -150,6 +150,10 @@ export default function ProjectDetail() {
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setExportOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-40 overflow-hidden">
+                    <button onClick={() => exportFile(reportsApi.statusPdfUrl(project.id), `status-${project.name}.pdf`)} className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 text-left">
+                      <FileText size={14} /> Executive Status Report (PDF)
+                    </button>
+                    <div className="border-t border-gray-100" />
                     <button onClick={() => exportFile(exportApi.projectTasksCsv(project.id), `tasks-${project.name}.csv`)} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
                       <FileText size={14} className="text-gray-400" /> Tasks (CSV)
                     </button>

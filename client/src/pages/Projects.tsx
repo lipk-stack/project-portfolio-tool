@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, Download } from 'lucide-react'
-import { projectsApi, exportApi } from '../api'
+import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, Download, Bookmark, X } from 'lucide-react'
+import { projectsApi, exportApi, viewsApi } from '../api'
 import { Project } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
@@ -12,6 +12,15 @@ import { format, parseISO } from 'date-fns'
 const STATUS_OPTIONS = ['', 'planning', 'active', 'on_hold', 'completed', 'cancelled']
 const HEALTH_OPTIONS = ['', 'green', 'yellow', 'red']
 const PRIORITY_OPTIONS = ['', 'critical', 'high', 'medium', 'low']
+
+interface SavedView {
+  id: number
+  name: string
+  filters: string
+  is_default: number
+}
+
+type ProjectFilters = { status: string; health: string; priority: string }
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
@@ -24,11 +33,50 @@ export default function Projects() {
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'grid' | 'list'>('list')
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ status: '', health: '', priority: '' })
+  const [filters, setFilters] = useState<ProjectFilters>({ status: '', health: '', priority: '' })
   const [showFilters, setShowFilters] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [views, setViews] = useState<SavedView[]>([])
+  const [activeViewId, setActiveViewId] = useState<number | null>(null)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    viewsApi.list('projects').then(r => {
+      setViews(r.data.views)
+      const def = (r.data.views as SavedView[]).find(v => v.is_default)
+      if (def) applyView(def)
+    })
+  }, [])
+
+  const applyView = (view: SavedView) => {
+    try {
+      const f = JSON.parse(view.filters)
+      setFilters({ status: f.status || '', health: f.health || '', priority: f.priority || '' })
+      if (f.search !== undefined) setSearch(f.search)
+      setActiveViewId(view.id)
+    } catch { /* ignore corrupt view */ }
+  }
+
+  const clearView = () => {
+    setFilters({ status: '', health: '', priority: '' })
+    setSearch('')
+    setActiveViewId(null)
+  }
+
+  const handleSaveView = async () => {
+    const name = prompt('Name this view:')
+    if (!name?.trim()) return
+    const res = await viewsApi.create({ page: 'projects', name: name.trim(), filters: { ...filters, search } })
+    setViews(v => [...v, res.data.view])
+    setActiveViewId(res.data.view.id)
+  }
+
+  const handleDeleteView = async (view: SavedView) => {
+    await viewsApi.delete(view.id)
+    setViews(v => v.filter(x => x.id !== view.id))
+    if (activeViewId === view.id) setActiveViewId(null)
+  }
 
   const fetchProjects = () => {
     const params: Record<string, string> = {}
@@ -79,6 +127,36 @@ export default function Projects() {
             <Plus size={16} /> New Project
           </button>
         </div>
+      </div>
+
+      {/* Saved views */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={clearView}
+          className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${activeViewId === null ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+        >
+          All Projects
+        </button>
+        {views.map(view => (
+          <span
+            key={view.id}
+            className={`group flex items-center gap-1.5 pl-3 pr-2 py-1.5 text-xs font-medium rounded-full border cursor-pointer transition-colors ${activeViewId === view.id ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            onClick={() => applyView(view)}
+          >
+            <Bookmark size={11} />
+            {view.name}
+            <X
+              size={12}
+              className={`opacity-0 group-hover:opacity-100 transition-opacity ${activeViewId === view.id ? 'hover:text-blue-200' : 'hover:text-red-500'}`}
+              onClick={e => { e.stopPropagation(); handleDeleteView(view) }}
+            />
+          </span>
+        ))}
+        {(Object.values(filters).some(Boolean) || search) && (
+          <button onClick={handleSaveView} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 border border-dashed border-blue-300 rounded-full hover:bg-blue-50 transition-colors">
+            <Plus size={11} /> Save view
+          </button>
+        )}
       </div>
 
       {/* Toolbar */}

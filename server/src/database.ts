@@ -203,6 +203,31 @@ export function initializeDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS saved_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      page TEXT NOT NULL,
+      name TEXT NOT NULL,
+      filters TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS automation_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      conditions TEXT,
+      action_type TEXT NOT NULL,
+      action_config TEXT,
+      enabled INTEGER DEFAULT 1,
+      fire_count INTEGER DEFAULT 0,
+      last_fired_at DATETIME,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id);
     CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
@@ -235,6 +260,9 @@ function runMigrations() {
   addColumn('tasks', 'sprint_id', 'INTEGER REFERENCES sprints(id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(project_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_sprint ON tasks(sprint_id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_saved_views_user ON saved_views(user_id, page)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_automation_rules_project ON automation_rules(project_id)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_automation_rules_trigger ON automation_rules(trigger_type, enabled)')
 }
 
 function seedDatabase() {
@@ -535,6 +563,17 @@ function seedDatabase() {
     insertActivity.run('project', projects[2], users[7], 'task_completed', JSON.stringify({ task: 'Data Ingestion Pipeline' }))
     insertActivity.run('project', projects[0], users[1], 'budget_updated', JSON.stringify({ note: 'Approved additional $20k for performance optimization' }))
     insertActivity.run('project', projects[3], users[2], 'health_changed', JSON.stringify({ from: 'yellow', to: 'red', reason: 'Budget overrun risk' }))
+  })()
+
+  // Automation rules
+  const insertRule = db.prepare(`
+    INSERT INTO automation_rules (project_id, name, trigger_type, conditions, action_type, action_config, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
+  db.transaction(() => {
+    insertRule.run(null, 'Notify manager when any task completes', 'task_status_changed', JSON.stringify({ to_status: 'done' }), 'notify_manager', null, users[0])
+    insertRule.run(null, 'Alert manager on high-severity risks', 'risk_created', JSON.stringify({ min_score: 6 }), 'notify_manager', null, users[0])
+    insertRule.run(projects[0], 'Escalate critical task creation', 'task_created', JSON.stringify({ priority_in: ['critical'] }), 'notify_user', JSON.stringify({ user_id: users[1] }), users[1])
   })()
 
   console.log('Database seeded successfully with demo data')

@@ -21,6 +21,9 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Budget Tracking** | Planned vs actual by category, spend rate, EVM-style charts |
 | **Cash Flow** | Time-phased budget: monthly planned vs actual spend with cumulative curves |
 | **Risk Register** | Probability/impact matrix, severity scoring, mitigation plans |
+| **Automations** | No-code rules engine: when task/risk events occur (with conditions), notify people, set priority, or add comments |
+| **Saved Views** | Save named filter combinations on the Projects page, with one-click recall |
+| **PDF Reports** | One-page executive status report per project (EVM KPIs, milestones, top risks) |
 | **Export** | One-click CSV export of projects/tasks/risks/budget/time-entries, full project as JSON |
 | **Analytics & Reports** | Portfolio performance, task velocity, hours logged, department utilization |
 | **Multi-Portfolio** | Group projects across multiple portfolios |
@@ -129,20 +132,23 @@ npm test   # Vitest unit tests (agile math: burndown, velocity)
 | Comments / Notifications | ✅ | ⚠️ | ✅ | ✅ |
 | Global Search (⌘K) | ✅ | ⚠️ | ✅ | ✅ |
 | CSV / JSON Export | ✅ | ✅ | ✅ | ✅ |
+| PDF Status Reports | ✅ | ✅ | ⚠️ Paid | ⚠️ Paid |
+| Workflow Automations | ✅ | ❌ | ✅ | ✅ |
+| Saved Views | ✅ | ⚠️ | ✅ | ✅ |
 | Self-Hosted | ✅ | ❌ | ✅ | ❌ |
 | Free | ✅ | ❌ | ⚠️ Limited | ⚠️ Limited |
 
 ## Roadmap (Future Enhancements)
 
 Completed in iteration 1: EVM, baseline, CSV/JSON export, calendar, global search, comments, notifications.
+Completed in iteration 2: sprints/agile (burndown, velocity), capacity forecast, time-phased cash flow.
+Completed in iteration 3: PDF executive reports, workflow automation rules engine, saved views, route-based code splitting.
 
 Planned for upcoming iterations:
 - [ ] Real-time collaboration (WebSockets)
-- [ ] PDF reports (executive briefing pack)
 - [ ] Email & in-app webhook notifications
-- [ ] Custom fields & saved views
+- [ ] Custom fields (text/number/select/date on tasks & projects)
 - [ ] What-if scenario planning (schedule simulation)
-- [ ] Workflow automation & rules engine
 - [ ] Integrations (Jira, GitHub, Slack, MS Teams, Outlook)
 - [ ] Mobile app (React Native)
 - [ ] AI-powered risk prediction & status auto-summary

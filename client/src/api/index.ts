@@ -97,6 +97,22 @@ export const reportsApi = {
   overview: () => api.get('/reports/overview'),
   resourceUtilization: () => api.get('/reports/resource-utilization'),
   criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
+  statusPdfUrl: (projectId: number) => `/api/reports/project/${projectId}/status.pdf`,
+}
+
+export const automationsApi = {
+  list: () => api.get('/automations'),
+  create: (data: object) => api.post('/automations', data),
+  update: (id: number, data: object) => api.put(`/automations/${id}`, data),
+  toggle: (id: number) => api.post(`/automations/${id}/toggle`),
+  delete: (id: number) => api.delete(`/automations/${id}`),
+}
+
+export const viewsApi = {
+  list: (page: string) => api.get('/views', { params: { page } }),
+  create: (data: { page: string; name: string; filters: object; is_default?: boolean }) => api.post('/views', data),
+  update: (id: number, data: object) => api.put(`/views/${id}`, data),
+  delete: (id: number) => api.delete(`/views/${id}`),
 }
 
 export const evmApi = {

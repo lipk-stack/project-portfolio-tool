@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
+import { runAutomations } from '../lib/automationRunner'
 
 const router = Router()
 
@@ -61,7 +62,15 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
       .run(assignee_id, 'assignment', `Assigned to "${name}"`, description || null, `/projects/${req.params.projectId}/tasks`)
   }
 
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.lastInsertRowid)
+  const taskId = Number(result.lastInsertRowid)
+  const projectId = Number(req.params.projectId)
+  const eventTask = { id: taskId, name, status: status || 'todo', priority: priority || 'medium', assignee_id: assignee_id || null }
+  runAutomations({ type: 'task_created', projectId, task: eventTask }, req.user!.userId)
+  if (assignee_id) {
+    runAutomations({ type: 'task_assigned', projectId, task: eventTask }, req.user!.userId)
+  }
+
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId)
   res.status(201).json({ task })
 })
 
@@ -93,6 +102,15 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   if (assignee_id && existing.assignee_id !== assignee_id && assignee_id !== req.user!.userId) {
     db.prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)')
       .run(assignee_id, 'assignment', `Assigned to "${name}"`, null, `/projects/${existing.project_id}/tasks`)
+  }
+
+  const projectId = Number(existing.project_id)
+  const eventTask = { id: Number(req.params.id), name, status, priority, assignee_id: assignee_id || null, from_status: existing.status as string }
+  if (existing.status !== status) {
+    runAutomations({ type: 'task_status_changed', projectId, task: eventTask }, req.user!.userId)
+  }
+  if (assignee_id && existing.assignee_id !== assignee_id) {
+    runAutomations({ type: 'task_assigned', projectId, task: eventTask }, req.user!.userId)
   }
 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)
