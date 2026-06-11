@@ -27,6 +27,20 @@ export const authApi = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }),
   register: (data: { email: string; password: string; name: string; department?: string }) => api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
+  updatePreferences: (data: { email_notifications?: boolean }) => api.put('/auth/me/preferences', data),
+}
+
+export const webhooksApi = {
+  list: () => api.get('/webhooks'),
+  create: (data: { url: string; secret?: string; events: string[]; project_id?: number | null }) => api.post('/webhooks', data),
+  update: (id: number, data: object) => api.put(`/webhooks/${id}`, data),
+  delete: (id: number) => api.delete(`/webhooks/${id}`),
+  test: (id: number) => api.post(`/webhooks/${id}/test`),
+}
+
+export const activityApi = {
+  list: (params?: { project_id?: number; user_id?: number; action?: string; limit?: number; offset?: number }) =>
+    api.get('/activity', { params }),
 }
 
 export const dashboardApi = {

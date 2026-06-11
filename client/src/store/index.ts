@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { User } from '../types'
+import { disconnectSocket } from '../realtime'
 
 interface AuthState {
   user: User | null
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>(set => ({
   clearAuth: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    disconnectSocket()
     set({ user: null, token: null, isAuthenticated: false })
   },
 }))

@@ -3,9 +3,10 @@ import { useAuthStore } from '../store'
 import Card from '../components/ui/Card'
 import { User, Bell, Database, Key, Plug, Plus, Trash2, Copy, Check } from 'lucide-react'
 import Avatar from '../components/ui/Avatar'
-import { tokensApi } from '../api'
+import { tokensApi, authApi } from '../api'
 import { ApiToken } from '../types'
 import { format } from 'date-fns'
+import WebhooksManager from '../components/WebhooksManager'
 
 // SQLite DATETIME is 'YYYY-MM-DD HH:MM:SS' (UTC, space-separated)
 const fmtSqlDate = (s: string) => format(new Date(s.replace(' ', 'T') + 'Z'), 'MMM d, yyyy')
@@ -19,9 +20,20 @@ export default function Settings() {
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const [emailEnabled, setEmailEnabled] = useState(true)
+
   useEffect(() => {
     tokensApi.list().then(r => setTokens(r.data.tokens)).catch(() => {})
+    authApi.me().then(r => setEmailEnabled(r.data.user.email_notifications !== 0)).catch(() => {})
   }, [])
+
+  const toggleEmail = async () => {
+    const next = !emailEnabled
+    setEmailEnabled(next)
+    try {
+      await authApi.updatePreferences({ email_notifications: next })
+    } catch { setEmailEnabled(!next) }
+  }
 
   const createToken = async () => {
     if (!tokenName.trim()) return
@@ -137,6 +149,16 @@ export default function Settings() {
           <h2 className="font-semibold text-gray-900">Notifications</h2>
         </div>
         <div className="space-y-4">
+          <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+            <div>
+              <div className="text-sm font-medium text-gray-700">Email notifications</div>
+              <div className="text-xs text-gray-400">Also send my in-app notifications to {user?.email} (requires SMTP configured on the server)</div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" checked={emailEnabled} onChange={toggleEmail} className="sr-only peer" />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+            </label>
+          </div>
           {[
             { label: 'Milestone approaching', sub: 'Alert 7 days before milestone due date' },
             { label: 'Budget threshold exceeded', sub: 'Alert when project exceeds 90% of budget' },
@@ -217,6 +239,9 @@ export default function Settings() {
           </button>
         </div>
       </Card>
+
+      {/* Webhooks (admin only) */}
+      {user?.role === 'admin' && <WebhooksManager />}
 
       {/* About */}
       <Card>

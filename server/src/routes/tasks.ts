@@ -3,6 +3,9 @@ import { db } from '../database'
 import { authenticate } from '../middleware/auth'
 import { runAutomations } from '../lib/automationRunner'
 import { saveCustomValues } from './customFields'
+import { createNotification } from '../lib/notify'
+import { emitToProject } from '../lib/realtime'
+import { dispatchWebhooks } from '../lib/webhookDispatcher'
 
 const router = Router()
 
@@ -59,8 +62,7 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
   db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', req.params.projectId, req.user!.userId, 'task_created', JSON.stringify({ name }))
 
   if (assignee_id && assignee_id !== req.user!.userId) {
-    db.prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)')
-      .run(assignee_id, 'assignment', `Assigned to "${name}"`, description || null, `/projects/${req.params.projectId}/tasks`)
+    createNotification(assignee_id, 'assignment', `Assigned to "${name}"`, description || null, `/projects/${req.params.projectId}/tasks`)
   }
 
   const taskId = Number(result.lastInsertRowid)
@@ -77,6 +79,8 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
   }
 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId)
+  emitToProject(projectId, 'task_changed', { action: 'created', task_id: taskId, actor_id: req.user!.userId })
+  dispatchWebhooks('task.created', projectId, { task })
   res.status(201).json({ task })
 })
 
@@ -106,8 +110,7 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   }
 
   if (assignee_id && existing.assignee_id !== assignee_id && assignee_id !== req.user!.userId) {
-    db.prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)')
-      .run(assignee_id, 'assignment', `Assigned to "${name}"`, null, `/projects/${existing.project_id}/tasks`)
+    createNotification(assignee_id, 'assignment', `Assigned to "${name}"`, null, `/projects/${existing.project_id}/tasks`)
   }
 
   const projectId = Number(existing.project_id)
@@ -125,16 +128,46 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   }
 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)
+  emitToProject(projectId, 'task_changed', { action: 'updated', task_id: Number(req.params.id), actor_id: req.user!.userId })
+  dispatchWebhooks('task.updated', projectId, { task, previous_status: existing.status })
   res.json({ task })
 })
 
 router.delete('/:id', authenticate, (req: Request, res: Response) => {
+  const existing = db.prepare('SELECT id, name, project_id FROM tasks WHERE id = ?').get(req.params.id) as { id: number; name: string; project_id: number } | undefined
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id)
+  if (existing) {
+    emitToProject(existing.project_id, 'task_changed', { action: 'deleted', task_id: existing.id, actor_id: req.user!.userId })
+    dispatchWebhooks('task.deleted', existing.project_id, { task: existing })
+  }
   res.json({ success: true })
 })
 
+// Walks the predecessor graph to reject dependencies that would create a cycle.
+function wouldCreateCycle(predecessorId: number, successorId: number): boolean {
+  if (predecessorId === successorId) return true
+  const getPreds = db.prepare('SELECT predecessor_id FROM task_dependencies WHERE successor_id = ?')
+  const visited = new Set<number>()
+  const stack = [predecessorId]
+  while (stack.length) {
+    const current = stack.pop()!
+    if (current === successorId) return true
+    if (visited.has(current)) continue
+    visited.add(current)
+    for (const row of getPreds.all(current) as Array<{ predecessor_id: number }>) {
+      stack.push(row.predecessor_id)
+    }
+  }
+  return false
+}
+
 router.post('/:id/dependencies', authenticate, (req: Request, res: Response) => {
   const { predecessor_id, type, lag } = req.body
+  const successorId = Number(req.params.id)
+  if (!predecessor_id) return res.status(400).json({ error: 'predecessor_id required' })
+  if (wouldCreateCycle(Number(predecessor_id), successorId)) {
+    return res.status(400).json({ error: 'This dependency would create a cycle' })
+  }
   db.prepare('INSERT OR IGNORE INTO task_dependencies (predecessor_id, successor_id, type, lag) VALUES (?, ?, ?, ?)').run(predecessor_id, req.params.id, type || 'FS', lag || 0)
   res.json({ success: true })
 })

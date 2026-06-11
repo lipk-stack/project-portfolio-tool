@@ -14,6 +14,7 @@ const Settings = lazy(() => import('./pages/Settings'))
 const Calendar = lazy(() => import('./pages/Calendar'))
 const Sprints = lazy(() => import('./pages/Sprints'))
 const Automations = lazy(() => import('./pages/Automations'))
+const Activity = lazy(() => import('./pages/Activity'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="calendar" element={<Calendar />} />
             <Route path="sprints" element={<Sprints />} />
             <Route path="automations" element={<Automations />} />
+            <Route path="activity" element={<Activity />} />
             <Route path="resources" element={<Resources />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />

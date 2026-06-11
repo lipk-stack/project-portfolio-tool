@@ -1,5 +1,6 @@
 import { db } from '../database'
 import { AutomationEvent, AutomationRule, describeEvent, parseJson, ruleMatches } from './automations'
+import { createNotification } from './notify'
 
 interface NotifyConfig {
   user_id?: number
@@ -37,7 +38,6 @@ export function runAutomations(event: AutomationEvent, actorId: number) {
 }
 
 function executeAction(rule: AutomationRule, event: AutomationEvent, actorId: number) {
-  const notify = db.prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)')
   const link = event.type.startsWith('risk')
     ? `/projects/${event.projectId}/risks`
     : `/projects/${event.projectId}/tasks`
@@ -46,14 +46,14 @@ function executeAction(rule: AutomationRule, event: AutomationEvent, actorId: nu
     case 'notify_manager': {
       const project = db.prepare('SELECT manager_id FROM projects WHERE id = ?').get(event.projectId) as { manager_id: number | null } | undefined
       if (project?.manager_id && project.manager_id !== actorId) {
-        notify.run(project.manager_id, 'automation', `[Rule] ${rule.name}`, describeEvent(event), link)
+        createNotification(project.manager_id, 'automation', `[Rule] ${rule.name}`, describeEvent(event), link)
       }
       break
     }
     case 'notify_user': {
       const config = parseJson<NotifyConfig>(rule.action_config, {})
       if (config.user_id && config.user_id !== actorId) {
-        notify.run(config.user_id, 'automation', `[Rule] ${rule.name}`, describeEvent(event), link)
+        createNotification(config.user_id, 'automation', `[Rule] ${rule.name}`, describeEvent(event), link)
       }
       break
     }

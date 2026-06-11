@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
 import { runAutomations } from '../lib/automationRunner'
+import { dispatchWebhooks } from '../lib/webhookDispatcher'
 
 const router = Router()
 
@@ -40,6 +41,7 @@ router.post('/project/:projectId', authenticate, (req: Request, res: Response) =
   }, req.user!.userId)
 
   const risk = db.prepare('SELECT * FROM risks WHERE id = ?').get(result.lastInsertRowid)
+  dispatchWebhooks('risk.created', Number(req.params.projectId), { risk })
   res.status(201).json({ risk })
 })
 
@@ -59,6 +61,7 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
       projectId: risk.project_id,
       risk: { id: Number(req.params.id), title, score, status },
     }, req.user!.userId)
+    dispatchWebhooks('risk.updated', risk.project_id, { risk })
   }
   res.json({ risk })
 })

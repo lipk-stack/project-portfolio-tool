@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { X } from 'lucide-react'
 import { Task, CustomField } from '../../types'
-import { resourcesApi, customFieldsApi } from '../../api'
+import { resourcesApi, customFieldsApi, tasksApi } from '../../api'
 import CommentsPanel from '../CommentsPanel'
 
 interface TaskFormProps {
   task?: Partial<Task>
   projectId?: number
-  onSubmit: (data: Partial<Task> & { custom_values?: Record<number, string> }) => void
+  onSubmit: (data: Partial<Task> & { custom_values?: Record<number, string>; dependencies?: number[] }) => void
   onCancel: () => void
   loading?: boolean
   defaultStatus?: string
@@ -17,6 +18,8 @@ export default function TaskForm({ task, projectId, onSubmit, onCancel, loading,
   const [users, setUsers] = useState<Array<{ id: number; name: string }>>([])
   const [customFields, setCustomFields] = useState<CustomField[]>([])
   const [customValues, setCustomValues] = useState<Record<number, string>>({})
+  const [projectTasks, setProjectTasks] = useState<Task[]>([])
+  const [dependencies, setDependencies] = useState<number[]>(task?.dependencies || [])
   const { register, handleSubmit, formState: { errors } } = useForm<Partial<Task>>({
     defaultValues: task || {
       status: (defaultStatus as Task['status']) || 'todo',
@@ -33,14 +36,22 @@ export default function TaskForm({ task, projectId, onSubmit, onCancel, loading,
   useEffect(() => {
     if (!projectId) return
     customFieldsApi.list(projectId).then(r => setCustomFields(r.data.fields)).catch(() => {})
+    tasksApi.list(projectId).then(r => setProjectTasks(r.data.tasks)).catch(() => {})
     if (task?.id) {
       customFieldsApi.taskValues(task.id).then(r => setCustomValues(r.data.values || {})).catch(() => {})
     }
   }, [projectId, task?.id])
 
   const submit = (data: Partial<Task>) => {
-    onSubmit(customFields.length > 0 ? { ...data, custom_values: customValues } : data)
+    onSubmit({
+      ...data,
+      ...(customFields.length > 0 ? { custom_values: customValues } : {}),
+      ...(projectId ? { dependencies } : {}),
+    })
   }
+
+  const availablePredecessors = projectTasks.filter(t => t.id !== task?.id && !dependencies.includes(t.id))
+  const taskName = (taskId: number) => projectTasks.find(t => t.id === taskId)?.name || `Task #${taskId}`
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
@@ -115,6 +126,32 @@ export default function TaskForm({ task, projectId, onSubmit, onCancel, loading,
         <label className="block text-sm font-medium text-gray-700 mb-1">WBS Code</label>
         <input {...register('wbs_code')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 1.2.3" />
       </div>
+
+      {projectId && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Predecessors</label>
+          {dependencies.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {dependencies.map(depId => (
+                <span key={depId} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md">
+                  {taskName(depId)}
+                  <button type="button" onClick={() => setDependencies(d => d.filter(x => x !== depId))} className="hover:text-blue-900" aria-label="Remove predecessor">
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <select
+            value=""
+            onChange={e => { if (e.target.value) setDependencies(d => [...d, Number(e.target.value)]) }}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Add predecessor (this task starts after it finishes)...</option>
+            {availablePredecessors.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {customFields.length > 0 && (
         <div className="border-t border-gray-100 pt-3">

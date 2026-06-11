@@ -3,7 +3,9 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import path from 'path'
+import http from 'http'
 import { initializeDatabase } from './database'
+import { initRealtime } from './lib/realtime'
 
 import authRoutes from './routes/auth'
 import dashboardRoutes from './routes/dashboard'
@@ -26,6 +28,8 @@ import viewsRoutes from './routes/views'
 import customFieldsRoutes from './routes/customFields'
 import scenarioRoutes from './routes/scenario'
 import tokensRoutes from './routes/tokens'
+import webhooksRoutes from './routes/webhooks'
+import activityRoutes from './routes/activity'
 
 initializeDatabase()
 
@@ -67,6 +71,8 @@ app.use('/api/views', viewsRoutes)
 app.use('/api/custom-fields', customFieldsRoutes)
 app.use('/api/scenario', scenarioRoutes)
 app.use('/api/tokens', tokensRoutes)
+app.use('/api/webhooks', webhooksRoutes)
+app.use('/api/activity', activityRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')
@@ -81,7 +87,10 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Internal server error' })
 })
 
-app.listen(PORT, '0.0.0.0', () => {
+const httpServer = http.createServer(app)
+initRealtime(httpServer)
+
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 ProjectPulse server running on http://localhost:${PORT}`)
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`)
 })

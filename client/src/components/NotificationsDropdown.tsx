@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Bell, CheckCheck, AtSign, AlertTriangle, Calendar, UserPlus, LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { notificationsApi } from '../api'
+import { getSocket } from '../realtime'
 import { Notification } from '../types'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 
@@ -28,8 +29,18 @@ export default function NotificationsDropdown() {
 
   useEffect(() => {
     load()
-    const interval = setInterval(load, 60000)
-    return () => clearInterval(interval)
+    // WebSocket push is the primary channel; a slow poll covers reconnect gaps.
+    const interval = setInterval(load, 120000)
+    const socket = getSocket()
+    const onNotification = (n: Notification) => {
+      setNotifications(prev => [n, ...prev].slice(0, 50))
+      setUnread(u => u + 1)
+    }
+    socket?.on('notification', onNotification)
+    return () => {
+      clearInterval(interval)
+      socket?.off('notification', onNotification)
+    }
   }, [])
 
   useEffect(() => {

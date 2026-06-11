@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
+import { createNotification } from '../lib/notify'
+import { dispatchWebhooks } from '../lib/webhookDispatcher'
 
 const router = Router()
 
@@ -26,10 +28,12 @@ router.post('/:entityType/:entityId', authenticate, (req: Request, res: Response
   if (req.params.entityType === 'task') {
     const task = db.prepare('SELECT assignee_id, name, project_id FROM tasks WHERE id = ?').get(req.params.entityId) as { assignee_id: number | null; name: string; project_id: number } | undefined
     if (task?.assignee_id && task.assignee_id !== req.user!.userId) {
-      db.prepare(`
-        INSERT INTO notifications (user_id, type, title, message, link)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(task.assignee_id, 'comment', `New comment on "${task.name}"`, content.trim().slice(0, 200), `/projects/${task.project_id}/tasks`)
+      createNotification(task.assignee_id, 'comment', `New comment on "${task.name}"`, content.trim().slice(0, 200), `/projects/${task.project_id}/tasks`)
+    }
+    if (task) {
+      dispatchWebhooks('comment.created', task.project_id, {
+        comment: { id: Number(result.lastInsertRowid), task_id: Number(req.params.entityId), task_name: task.name, content: content.trim() },
+      })
     }
   }
 

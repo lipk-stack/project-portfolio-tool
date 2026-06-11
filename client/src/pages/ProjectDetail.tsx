@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi } from '../api'
+import { getSocket } from '../realtime'
+import { useAuthStore } from '../store'
 import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
 import EVMDashboard from '../components/EVMDashboard'
 import ScenarioPlanner from '../components/ScenarioPlanner'
@@ -69,18 +71,53 @@ export default function ProjectDetail() {
     loadProject().finally(() => setLoading(false))
   }, [loadProject])
 
+  // Live collaboration: refresh when someone else changes a task in this project.
+  const currentUserId = useAuthStore(s => s.user?.id)
+  useEffect(() => {
+    if (!id) return
+    const socket = getSocket()
+    if (!socket) return
+    socket.emit('join:project', Number(id))
+    const onTaskChanged = (payload: { actor_id: number }) => {
+      if (payload.actor_id !== currentUserId) loadProject()
+    }
+    socket.on('task_changed', onTaskChanged)
+    return () => {
+      socket.emit('leave:project', Number(id))
+      socket.off('task_changed', onTaskChanged)
+    }
+  }, [id, currentUserId, loadProject])
+
   const handleTaskUpdate = async (taskId: number, status: TaskStatus) => {
     await tasksApi.update(taskId, { ...tasks.find(t => t.id === taskId), status })
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
   }
 
-  const handleTaskSave = async (data: Partial<Task>) => {
+  const handleTaskSave = async (data: Partial<Task> & { dependencies?: number[] }) => {
     setSavingTask(true)
     try {
+      const { dependencies: newDeps, ...taskData } = data
+      let taskId: number
       if (editTask?.id) {
-        await tasksApi.update(editTask.id, data)
+        await tasksApi.update(editTask.id, taskData)
+        taskId = editTask.id
       } else {
-        await tasksApi.create(Number(id), data)
+        const res = await tasksApi.create(Number(id), taskData)
+        taskId = res.data.task.id
+      }
+      if (newDeps) {
+        const oldDeps = editTask?.dependencies || []
+        const added = newDeps.filter(d => !oldDeps.includes(d))
+        const removed = oldDeps.filter(d => !newDeps.includes(d))
+        for (const dep of added) {
+          try {
+            await tasksApi.addDependency(taskId, { predecessor_id: dep })
+          } catch (err) {
+            const msg = (err as { response?: { data?: { error?: string } } }).response?.data?.error
+            alert(msg || 'Could not add dependency')
+          }
+        }
+        for (const dep of removed) await tasksApi.removeDependency(taskId, dep)
       }
       setShowTaskForm(false)
       setEditTask(null)

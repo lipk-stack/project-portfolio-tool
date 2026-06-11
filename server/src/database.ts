@@ -287,6 +287,24 @@ function runMigrations() {
   addColumn('tasks', 'baseline_end', 'DATE')
   addColumn('tasks', 'baseline_hours', 'REAL')
   addColumn('tasks', 'sprint_id', 'INTEGER REFERENCES sprints(id)')
+  addColumn('users', 'email_notifications', 'INTEGER DEFAULT 1')
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      url TEXT NOT NULL,
+      secret TEXT,
+      events TEXT NOT NULL,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      enabled INTEGER DEFAULT 1,
+      last_status INTEGER,
+      last_fired_at DATETIME,
+      fail_count INTEGER DEFAULT 0,
+      created_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_webhooks_enabled ON webhooks(enabled)')
+  db.exec('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(project_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_sprint ON tasks(sprint_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_saved_views_user ON saved_views(user_id, page)')

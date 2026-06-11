@@ -111,11 +111,19 @@ The backend exposes a comprehensive REST API. Highlights:
 - `POST /api/scenario/project/:id/simulate` — What-if schedule simulation (shifts/extensions ripple through dependencies; nothing persisted)
 - `GET /api/reports/portfolio/:id/briefing.pdf` — Multi-project executive briefing (`:id` or `all`)
 - `GET /api/tokens` — Personal access tokens (`POST` to create, `DELETE /:id` to revoke); use `Authorization: Bearer ppt_...` for external integrations
+- `GET /api/webhooks` — Outbound webhooks, admin only (`POST` to create, `POST /:id/test` to ping; payloads HMAC-SHA256 signed via `X-PPT-Signature`)
+- `GET /api/activity?project_id=&user_id=&action=` — Filterable, paginated audit trail
+- `PUT /api/auth/me/preferences` — Per-user preferences (email notification opt-out)
+
+## Real-Time & Email
+
+- **WebSockets (socket.io):** notifications are pushed instantly to the bell dropdown, and task changes made by teammates refresh open project pages live. The socket handshake reuses the JWT.
+- **Email notifications:** set the `SMTP_*` variables in `.env` to deliver every in-app notification by email too (silently disabled when unconfigured; users can opt out in Settings).
 
 ## Testing
 
 ```bash
-npm test   # Vitest unit tests (agile math: burndown, velocity)
+npm test   # Vitest unit tests (agile math, automations, scenarios, webhooks)
 ```
 
 ## Comparison with Industry Leaders
@@ -142,6 +150,11 @@ npm test   # Vitest unit tests (agile math: burndown, velocity)
 | Custom Fields | ✅ | ✅ | ✅ | ⚠️ Paid |
 | What-If Scenario Planning | ✅ | ⚠️ Paid tier | ❌ | ❌ |
 | API Access Tokens | ✅ | ⚠️ | ✅ | ✅ |
+| Real-Time Collaboration | ✅ WebSockets | ⚠️ | ✅ | ✅ |
+| Email Notifications | ✅ | ✅ | ✅ | ✅ |
+| Outbound Webhooks (HMAC) | ✅ | ❌ | ✅ | ⚠️ Paid |
+| Audit Log | ✅ | ⚠️ | ✅ Paid | ⚠️ Paid |
+| Dependency Editor + Cycle Guard | ✅ | ✅ | ⚠️ Plugin | ⚠️ Paid |
 | Self-Hosted | ✅ | ❌ | ✅ | ❌ |
 | Free | ✅ | ❌ | ⚠️ Limited | ⚠️ Limited |
 
@@ -151,10 +164,11 @@ Completed in iteration 1: EVM, baseline, CSV/JSON export, calendar, global searc
 Completed in iteration 2: sprints/agile (burndown, velocity), capacity forecast, time-phased cash flow.
 Completed in iteration 3: PDF executive reports, workflow automation rules engine, saved views, route-based code splitting.
 Completed in iteration 4: custom fields, what-if scenario planning, portfolio briefing PDF, personal API tokens.
+Completed in iteration 5: real-time collaboration (WebSockets), email notifications (SMTP), outbound webhooks with HMAC signing, audit log UI, task dependency editor with cycle detection.
 
 Planned for upcoming iterations:
-- [ ] Real-time collaboration (WebSockets)
-- [ ] Email & in-app webhook notifications
+- [ ] Earned schedule metrics (SPI(t), forecast completion date)
 - [ ] Integrations (Jira, GitHub, Slack, MS Teams, Outlook)
+- [ ] SSO / SAML, multi-tenant
 - [ ] Mobile app (React Native)
 - [ ] AI-powered risk prediction & status auto-summary

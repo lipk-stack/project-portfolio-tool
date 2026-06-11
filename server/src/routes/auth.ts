@@ -38,8 +38,18 @@ router.post('/register', (req: Request, res: Response) => {
 })
 
 router.get('/me', authenticate, (req: Request, res: Response) => {
-  const user = db.prepare('SELECT id, email, name, role, department, capacity, hourly_rate, created_at FROM users WHERE id = ?').get(req.user!.userId)
+  const user = db.prepare('SELECT id, email, name, role, department, capacity, hourly_rate, email_notifications, created_at FROM users WHERE id = ?').get(req.user!.userId)
   if (!user) return res.status(404).json({ error: 'User not found' })
+  res.json({ user })
+})
+
+router.put('/me/preferences', authenticate, (req: Request, res: Response) => {
+  const { email_notifications } = req.body
+  if (email_notifications !== undefined) {
+    db.prepare('UPDATE users SET email_notifications = ? WHERE id = ?')
+      .run(email_notifications ? 1 : 0, req.user!.userId)
+  }
+  const user = db.prepare('SELECT id, email, name, role, department, capacity, hourly_rate, email_notifications, created_at FROM users WHERE id = ?').get(req.user!.userId)
   res.json({ user })
 })
 

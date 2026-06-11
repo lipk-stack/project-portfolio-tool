@@ -13,6 +13,34 @@ export interface User {
   capacity: number
   hourly_rate: number
   avatar_url?: string
+  email_notifications?: number
+  created_at: string
+}
+
+export interface Webhook {
+  id: number
+  url: string
+  events: string
+  project_id: number | null
+  project_name?: string
+  enabled: number
+  has_secret?: number
+  last_status: number | null
+  last_fired_at: string | null
+  fail_count: number
+  created_by_name?: string
+  created_at: string
+}
+
+export interface ActivityEntry {
+  id: number
+  entity_type: string
+  entity_id: number
+  user_id: number | null
+  user_name?: string
+  project_name?: string
+  action: string
+  details: string | null
   created_at: string
 }
 
