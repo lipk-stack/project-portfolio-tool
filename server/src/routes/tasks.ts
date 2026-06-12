@@ -41,6 +41,30 @@ router.get('/project/:projectId', authenticate, (req: Request, res: Response) =>
   res.json({ tasks: tasksWithDeps, dependencies })
 })
 
+// Cross-project view of the current user's open tasks, for the My Work page.
+router.get('/my-work', authenticate, (req: Request, res: Response) => {
+  const tasks = db.prepare(`
+    SELECT t.id, t.name, t.status, t.priority, t.start_date, t.end_date, t.completion_percent,
+      t.story_points, t.estimated_hours, t.actual_hours, t.project_id,
+      p.name as project_name, p.color as project_color
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.assignee_id = ? AND t.status != 'done' AND p.status NOT IN ('cancelled', 'completed')
+    ORDER BY t.end_date IS NULL, t.end_date ASC,
+      CASE t.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END
+  `).all(req.user!.userId) as Array<{ end_date: string | null }>
+
+  const today = new Date().toISOString().slice(0, 10)
+  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const counts = {
+    total: tasks.length,
+    overdue: tasks.filter(t => t.end_date && t.end_date < today).length,
+    due_today: tasks.filter(t => t.end_date === today).length,
+    due_this_week: tasks.filter(t => t.end_date && t.end_date > today && t.end_date <= weekEnd).length,
+  }
+  res.json({ tasks, counts })
+})
+
 router.post('/project/:projectId', authenticate, (req: Request, res: Response) => {
   const { name, description, parent_id, status, priority, assignee_id, start_date, end_date, estimated_hours, wbs_code, position, sprint, story_points, tags } = req.body
   if (!name) return res.status(400).json({ error: 'Task name required' })
@@ -125,6 +149,39 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   }
   if (assignee_id && existing.assignee_id !== assignee_id) {
     runAutomations({ type: 'task_assigned', projectId, task: eventTask }, req.user!.userId)
+  }
+
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)
+  emitToProject(projectId, 'task_changed', { action: 'updated', task_id: Number(req.params.id), actor_id: req.user!.userId })
+  dispatchWebhooks('task.updated', projectId, { task, previous_status: existing.status })
+  res.json({ task })
+})
+
+// Status-only update — unlike PUT (full replace), this is safe for quick
+// actions from list views that don't hold the complete task object.
+router.patch('/:id/status', authenticate, (req: Request, res: Response) => {
+  const { status } = req.body
+  const VALID = ['todo', 'in_progress', 'review', 'blocked', 'done']
+  if (!VALID.includes(status)) return res.status(400).json({ error: `status must be one of: ${VALID.join(', ')}` })
+
+  const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
+  if (!existing) return res.status(404).json({ error: 'Task not found' })
+
+  db.prepare(`
+    UPDATE tasks SET status = ?,
+      completion_percent = CASE WHEN ? = 'done' THEN 100 ELSE completion_percent END,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(status, status, req.params.id)
+
+  const projectId = Number(existing.project_id)
+  if (existing.status !== status) {
+    db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', projectId, req.user!.userId, 'task_status_changed', JSON.stringify({ task: existing.name, from: existing.status, to: status }))
+    if (status === 'done') {
+      db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', projectId, req.user!.userId, 'task_completed', JSON.stringify({ task: existing.name }))
+    }
+    const eventTask = { id: Number(req.params.id), name: String(existing.name), status, priority: String(existing.priority), assignee_id: (existing.assignee_id as number | null), from_status: existing.status as string }
+    runAutomations({ type: 'task_status_changed', projectId, task: eventTask }, req.user!.userId)
   }
 
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)

@@ -15,6 +15,7 @@ export default function WebhooksManager() {
   const [secret, setSecret] = useState('')
   const [events, setEvents] = useState<string[]>([])
   const [projectId, setProjectId] = useState('')
+  const [format, setFormat] = useState('json')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [testResult, setTestResult] = useState<Record<number, string>>({})
@@ -41,8 +42,9 @@ export default function WebhooksManager() {
         secret: secret.trim() || undefined,
         events,
         project_id: projectId ? Number(projectId) : null,
+        format,
       })
-      setUrl(''); setSecret(''); setEvents([]); setProjectId(''); setShowForm(false)
+      setUrl(''); setSecret(''); setEvents([]); setProjectId(''); setFormat('json'); setShowForm(false)
       await load()
     } catch (err) {
       setError((err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Failed to create webhook')
@@ -93,7 +95,14 @@ export default function WebhooksManager() {
             <label className="block text-xs font-medium text-gray-500 mb-1">Payload URL *</label>
             <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/hooks/projectpulse" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Format</label>
+              <select value={format} onChange={e => setFormat(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="json">JSON (signed payload)</option>
+                <option value="slack">Slack incoming webhook</option>
+              </select>
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Secret (optional)</label>
               <input value={secret} onChange={e => setSecret(e.target.value)} placeholder="Shared HMAC secret" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -141,7 +150,10 @@ export default function WebhooksManager() {
                   : <XCircle size={14} className="text-red-500 flex-shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-800 truncate">{w.url}</div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="text-sm font-medium text-gray-800 truncate">{w.url}</div>
+                  {w.format === 'slack' && <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded bg-purple-100 text-purple-700 flex-shrink-0">Slack</span>}
+                </div>
                 <div className="text-xs text-gray-400">
                   {(JSON.parse(w.events) as string[]).join(', ')} · {w.project_name || 'all projects'}
                   {w.last_fired_at && ` · last fired ${fmtSqlDate(w.last_fired_at)}`}

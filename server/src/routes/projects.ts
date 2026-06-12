@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
+import { dispatchWebhooks } from '../lib/webhookDispatcher'
 
 const router = Router()
 
@@ -48,6 +49,7 @@ router.post('/', authenticate, (req: Request, res: Response) => {
   db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', result.lastInsertRowid, req.user!.userId, 'created', JSON.stringify({ name }))
 
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(result.lastInsertRowid)
+  dispatchWebhooks('project.created', Number(result.lastInsertRowid), { project })
   res.status(201).json({ project })
 })
 
@@ -100,6 +102,7 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   }
 
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id)
+  dispatchWebhooks('project.updated', Number(req.params.id), { project, previous_health: existing.health })
   res.json({ project })
 })
 

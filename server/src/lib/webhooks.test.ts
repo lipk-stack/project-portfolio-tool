@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import crypto from 'crypto'
-import { buildEventBody, isValidEventList, signPayload, webhookMatches } from './webhooks'
+import { buildEventBody, buildSlackBody, buildSlackText, isValidEventList, signPayload, webhookMatches } from './webhooks'
 
 const hook = (overrides: Partial<{ events: string; project_id: number | null; enabled: number }> = {}) => ({
   events: JSON.stringify(['task.created', 'risk.updated']),
@@ -66,5 +66,48 @@ describe('buildEventBody', () => {
     expect(body.project_id).toBe(9)
     expect(body.data).toEqual({ task: { id: 1 } })
     expect(new Date(body.timestamp).getTime()).not.toBeNaN()
+  })
+})
+
+describe('buildSlackText', () => {
+  it('formats task lifecycle events', () => {
+    expect(buildSlackText('task.created', { task: { name: 'Ship it', priority: 'high' } }))
+      .toBe(':sparkles: Task created: *Ship it* (high priority)')
+    expect(buildSlackText('task.updated', { task: { name: 'Ship it', status: 'done' }, previous_status: 'review' }))
+      .toBe(':pencil2: Task updated: *Ship it* — review to done')
+    expect(buildSlackText('task.deleted', { task: { name: 'Old task' } }))
+      .toBe(':wastebasket: Task deleted: *Old task*')
+  })
+
+  it('omits the status transition when status is unchanged', () => {
+    expect(buildSlackText('task.updated', { task: { name: 'T', status: 'todo' }, previous_status: 'todo' }))
+      .toBe(':pencil2: Task updated: *T*')
+  })
+
+  it('formats risk, comment and project events', () => {
+    expect(buildSlackText('risk.created', { risk: { title: 'Vendor delay', probability: 'high', impact: 'medium' } }))
+      .toContain('Vendor delay')
+    expect(buildSlackText('comment.created', { comment: { task_name: 'API design', content: 'LGTM' } }))
+      .toBe(':speech_balloon: New comment on *API design*: LGTM')
+    expect(buildSlackText('project.created', { project: { name: 'Apollo' } }))
+      .toBe(':rocket: Project created: *Apollo*')
+    expect(buildSlackText('project.updated', { project: { name: 'Apollo', status: 'active', health: 'green' } }))
+      .toBe(':clipboard: Project updated: *Apollo* — active, health green')
+  })
+
+  it('truncates long comment bodies to 200 chars', () => {
+    const text = buildSlackText('comment.created', { comment: { task_name: 'T', content: 'x'.repeat(500) } })
+    expect(text.length).toBeLessThan(260)
+  })
+
+  it('never throws on missing or malformed data', () => {
+    expect(buildSlackText('task.created', {})).toContain('Task created')
+    expect(buildSlackText('task.updated', { task: null })).toContain('Task updated')
+    expect(buildSlackText('unknown.event', {})).toBe('ProjectPulse event: unknown.event')
+  })
+
+  it('wraps text for slack body and accepts new event types in the registry', () => {
+    expect(buildSlackBody('ping', {})).toEqual({ text: ':wave: ProjectPulse webhook test — your integration works!' })
+    expect(isValidEventList(['project.created'])).toBe(true)
   })
 })

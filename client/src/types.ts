@@ -24,6 +24,7 @@ export interface Webhook {
   project_id: number | null
   project_name?: string
   enabled: number
+  format: string
   has_secret?: number
   last_status: number | null
   last_fired_at: string | null
@@ -135,9 +136,21 @@ export interface EVMMetrics {
   plannedPercent: number
 }
 
+export interface EarnedSchedule {
+  plannedDurationDays: number
+  actualTimeDays: number
+  earnedScheduleDays: number
+  SPIt: number
+  timeVarianceDays: number
+  forecastDurationDays: number
+  forecastEndDate: string
+  forecastSlipDays: number
+}
+
 export interface EVMResponse {
   project: { id: number; BAC: number; AC: number; EV: number; PV: number }
   metrics: EVMMetrics
+  earnedSchedule: EarnedSchedule | null
   interpretation: { cost: string; schedule: string; health: Health }
   sCurve: Array<{ date: string; planned: number; earned: number; actual: number }>
   taskCount: number

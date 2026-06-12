@@ -73,7 +73,7 @@ export default function EVMDashboard({ projectId, hasBaseline, onBaselineChange 
     </div>
   )
 
-  const { metrics, interpretation, sCurve } = data
+  const { metrics, interpretation, sCurve, earnedSchedule: es } = data
   const cpiTone = metrics.CPI >= 1 ? 'green' : metrics.CPI >= 0.95 ? 'yellow' : 'red'
   const spiTone = metrics.SPI >= 1 ? 'green' : metrics.SPI >= 0.95 ? 'yellow' : 'red'
   const healthBadge = {
@@ -136,6 +136,22 @@ export default function EVMDashboard({ projectId, hasBaseline, onBaselineChange 
         <MetricCard label="Variance at Completion (VAC)" value={fmtMoney(metrics.VAC)} sub={metrics.VAC >= 0 ? 'Surplus' : 'Overrun'} icon={metrics.VAC >= 0 ? TrendingUp : TrendingDown} tone={metrics.VAC >= 0 ? 'green' : 'red'} />
         <MetricCard label="To-Complete Performance (TCPI)" value={metrics.TCPI.toFixed(2)} sub={metrics.TCPI <= 1 ? 'Achievable' : 'Aggressive'} icon={Activity} tone={metrics.TCPI <= 1 ? 'green' : 'yellow'} />
       </div>
+
+      {/* Earned schedule (time-based) */}
+      {es && (
+        <div>
+          <div className="mb-2">
+            <h3 className="text-sm font-semibold text-gray-900">Earned Schedule (Time-Based)</h3>
+            <p className="text-xs text-gray-500">SPI(t) stays meaningful late in the project, where classic SPI converges to 1</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <MetricCard label="Earned Schedule (ES)" value={`${es.earnedScheduleDays}d`} sub={`of ${es.plannedDurationDays}d planned · ${es.actualTimeDays}d elapsed`} icon={Clock} tone="blue" />
+            <MetricCard label="Schedule Performance SPI(t)" value={es.SPIt.toFixed(2)} sub={es.SPIt >= 1 ? 'Ahead of plan' : 'Behind plan'} icon={es.SPIt >= 1 ? TrendingUp : TrendingDown} tone={es.SPIt >= 1 ? 'green' : es.SPIt >= 0.95 ? 'yellow' : 'red'} />
+            <MetricCard label="Time Variance TV(t)" value={`${es.timeVarianceDays > 0 ? '+' : ''}${es.timeVarianceDays}d`} sub={es.timeVarianceDays >= 0 ? 'Ahead' : 'Behind'} icon={Clock} tone={es.timeVarianceDays >= 0 ? 'green' : 'red'} />
+            <MetricCard label="Forecast Completion" value={es.forecastEndDate} sub={es.forecastSlipDays === 0 ? 'On the planned date' : es.forecastSlipDays > 0 ? `${es.forecastSlipDays}d late` : `${-es.forecastSlipDays}d early`} icon={Target} tone={es.forecastSlipDays <= 0 ? 'green' : 'red'} />
+          </div>
+        </div>
+      )}
 
       {/* S-Curve chart */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">

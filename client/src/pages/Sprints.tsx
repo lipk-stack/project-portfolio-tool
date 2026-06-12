@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { projectsApi, sprintsApi, tasksApi } from '../api'
+import { getSocket } from '../realtime'
+import { useAuthStore } from '../store'
 import Card, { CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import { Badge } from '../components/ui/Badge'
@@ -91,6 +93,23 @@ export default function Sprints() {
       refresh(projectId)
     }
   }, [projectId, refresh])
+
+  // Live collaboration: refresh when someone else changes a task in this project.
+  const currentUserId = useAuthStore(s => s.user?.id)
+  useEffect(() => {
+    if (!projectId) return
+    const socket = getSocket()
+    if (!socket) return
+    socket.emit('join:project', projectId)
+    const onTaskChanged = (payload: { actor_id: number }) => {
+      if (payload.actor_id !== currentUserId) refresh(projectId, true)
+    }
+    socket.on('task_changed', onTaskChanged)
+    return () => {
+      socket.emit('leave:project', projectId)
+      socket.off('task_changed', onTaskChanged)
+    }
+  }, [projectId, currentUserId, refresh])
 
   useEffect(() => {
     if (selectedSprintId) {

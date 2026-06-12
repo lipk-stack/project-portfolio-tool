@@ -303,6 +303,7 @@ function runMigrations() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  addColumn('webhooks', 'format', "TEXT DEFAULT 'json'") // table exists by now; upgrades It.5 DBs
   db.exec('CREATE INDEX IF NOT EXISTS idx_webhooks_enabled ON webhooks(enabled)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(project_id)')

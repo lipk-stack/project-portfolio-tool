@@ -8,6 +8,8 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 |---|---|
 | **Portfolio Dashboard** | KPI cards, portfolio EVM strip (CPI/SPI/EV/PV/AC), health scorecard, upcoming milestones, activity feed |
 | **EVM Analytics** | PMBOK-standard Earned Value: BAC/EV/PV/AC, CV/SV, CPI/SPI, EAC/ETC/VAC/TCPI, S-curve chart, schedule slip forecast, executive narrative |
+| **Earned Schedule** | Time-based schedule analytics: ES, SPI(t), time variance, forecast completion date — stays meaningful late in the project where classic SPI converges to 1 |
+| **My Work** | Cross-project list of your open tasks grouped by urgency (overdue / today / this week), with one-click status updates |
 | **Baseline Tracking** | Capture project & task baselines (start/end/budget/hours), variance visualization on Gantt bars (slipped baselines turn red) |
 | **Gantt Chart** | Interactive SVG, day/week/month zoom, dependency arrows, critical path highlighting, today line, baseline overlay |
 | **Kanban Board** | Drag-and-drop (DnD Kit), 5 columns, priority indicators, assignee avatars |
@@ -111,7 +113,9 @@ The backend exposes a comprehensive REST API. Highlights:
 - `POST /api/scenario/project/:id/simulate` — What-if schedule simulation (shifts/extensions ripple through dependencies; nothing persisted)
 - `GET /api/reports/portfolio/:id/briefing.pdf` — Multi-project executive briefing (`:id` or `all`)
 - `GET /api/tokens` — Personal access tokens (`POST` to create, `DELETE /:id` to revoke); use `Authorization: Bearer ppt_...` for external integrations
-- `GET /api/webhooks` — Outbound webhooks, admin only (`POST` to create, `POST /:id/test` to ping; payloads HMAC-SHA256 signed via `X-PPT-Signature`)
+- `GET /api/webhooks` — Outbound webhooks, admin only (`POST` to create, `POST /:id/test` to ping; payloads HMAC-SHA256 signed via `X-PPT-Signature`; `format: "slack"` posts Slack-ready `{text}` messages straight to incoming-webhook URLs)
+- `GET /api/tasks/my-work` — Current user's open tasks across projects with urgency counts
+- `PATCH /api/tasks/:id/status` — Status-only task update (safe for quick actions; fires automations, sockets, webhooks)
 - `GET /api/activity?project_id=&user_id=&action=` — Filterable, paginated audit trail
 - `PUT /api/auth/me/preferences` — Per-user preferences (email notification opt-out)
 
@@ -153,6 +157,9 @@ npm test   # Vitest unit tests (agile math, automations, scenarios, webhooks)
 | Real-Time Collaboration | ✅ WebSockets | ⚠️ | ✅ | ✅ |
 | Email Notifications | ✅ | ✅ | ✅ | ✅ |
 | Outbound Webhooks (HMAC) | ✅ | ❌ | ✅ | ⚠️ Paid |
+| Slack Notifications | ✅ Native format | ❌ | ✅ | ✅ |
+| Earned Schedule / SPI(t) | ✅ | ❌ | ❌ | ❌ |
+| My Work View | ✅ | ✅ | ✅ | ✅ |
 | Audit Log | ✅ | ⚠️ | ✅ Paid | ⚠️ Paid |
 | Dependency Editor + Cycle Guard | ✅ | ✅ | ⚠️ Plugin | ⚠️ Paid |
 | Self-Hosted | ✅ | ❌ | ✅ | ❌ |
@@ -165,10 +172,10 @@ Completed in iteration 2: sprints/agile (burndown, velocity), capacity forecast,
 Completed in iteration 3: PDF executive reports, workflow automation rules engine, saved views, route-based code splitting.
 Completed in iteration 4: custom fields, what-if scenario planning, portfolio briefing PDF, personal API tokens.
 Completed in iteration 5: real-time collaboration (WebSockets), email notifications (SMTP), outbound webhooks with HMAC signing, audit log UI, task dependency editor with cycle detection.
+Completed in iteration 6: earned schedule metrics (SPI(t), forecast completion), My Work page, Slack-format webhooks, project created/updated webhook events, status-only task PATCH, live sprint board updates.
 
 Planned for upcoming iterations:
-- [ ] Earned schedule metrics (SPI(t), forecast completion date)
-- [ ] Integrations (Jira, GitHub, Slack, MS Teams, Outlook)
+- [ ] Inbound integrations (Jira/GitHub import, MS Teams, Outlook)
 - [ ] SSO / SAML, multi-tenant
 - [ ] Mobile app (React Native)
 - [ ] AI-powered risk prediction & status auto-summary

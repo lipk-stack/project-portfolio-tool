@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { db } from '../database'
 import { authenticate } from '../middleware/auth'
+import { computeEarnedSchedule } from '../lib/earnedSchedule'
 
 const router = Router()
 
@@ -94,8 +95,11 @@ router.get('/project/:id', authenticate, (req: Request, res: Response) => {
     }
   }
 
+  const earnedSchedule = start && end ? computeEarnedSchedule({ BAC, EV, start, end }) : null
+
   res.json({
     project: { id: project.id, BAC, AC, EV, PV },
+    earnedSchedule,
     metrics: {
       BAC: Math.round(BAC),
       AC: Math.round(AC),

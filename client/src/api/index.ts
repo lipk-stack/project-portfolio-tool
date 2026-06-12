@@ -32,7 +32,7 @@ export const authApi = {
 
 export const webhooksApi = {
   list: () => api.get('/webhooks'),
-  create: (data: { url: string; secret?: string; events: string[]; project_id?: number | null }) => api.post('/webhooks', data),
+  create: (data: { url: string; secret?: string; events: string[]; project_id?: number | null; format?: string }) => api.post('/webhooks', data),
   update: (id: number, data: object) => api.put(`/webhooks/${id}`, data),
   delete: (id: number) => api.delete(`/webhooks/${id}`),
   test: (id: number) => api.post(`/webhooks/${id}/test`),
@@ -79,6 +79,8 @@ export const tasksApi = {
   addDependency: (id: number, data: object) => api.post(`/tasks/${id}/dependencies`, data),
   removeDependency: (id: number, predecessorId: number) => api.delete(`/tasks/${id}/dependencies/${predecessorId}`),
   logTime: (id: number, data: object) => api.post(`/tasks/${id}/time`, data),
+  myWork: () => api.get('/tasks/my-work'),
+  updateStatus: (id: number, status: string) => api.patch(`/tasks/${id}/status`, { status }),
 }
 
 export const resourcesApi = {

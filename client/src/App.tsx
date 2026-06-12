@@ -15,6 +15,7 @@ const Calendar = lazy(() => import('./pages/Calendar'))
 const Sprints = lazy(() => import('./pages/Sprints'))
 const Automations = lazy(() => import('./pages/Automations'))
 const Activity = lazy(() => import('./pages/Activity'))
+const MyWork = lazy(() => import('./pages/MyWork'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="my-work" element={<MyWork />} />
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />} />

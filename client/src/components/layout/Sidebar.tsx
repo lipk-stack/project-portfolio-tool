@@ -2,12 +2,13 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, FolderOpen, Users,
   BarChart3, Settings, ChevronLeft, ChevronRight,
-  Calendar as CalendarIcon, Zap, Rocket, Workflow, History
+  Calendar as CalendarIcon, Zap, Rocket, Workflow, History, ListTodo
 } from 'lucide-react'
 import { useUIStore } from '../../store'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/my-work', label: 'My Work', icon: ListTodo },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/projects', label: 'Projects', icon: FolderOpen },
   { to: '/calendar', label: 'Calendar', icon: CalendarIcon },

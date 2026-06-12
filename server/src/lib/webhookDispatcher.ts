@@ -1,5 +1,5 @@
 import { db } from '../database'
-import { WebhookRow, buildEventBody, signPayload, webhookMatches } from './webhooks'
+import { WebhookRow, buildEventBody, buildSlackBody, signPayload, webhookMatches } from './webhooks'
 
 // Fires all matching webhooks for an event. Fully async + fail-safe: delivery
 // happens in the background and never blocks or breaks the triggering request.
@@ -9,9 +9,10 @@ export function dispatchWebhooks(eventType: string, projectId: number, data: Rec
     const matching = hooks.filter(h => webhookMatches(h, eventType, projectId))
     if (matching.length === 0) return
 
-    const body = JSON.stringify(buildEventBody(eventType, projectId, data))
+    const jsonBody = JSON.stringify(buildEventBody(eventType, projectId, data))
+    const slackBody = JSON.stringify(buildSlackBody(eventType, data))
     for (const hook of matching) {
-      deliver(hook, eventType, body)
+      deliver(hook, eventType, hook.format === 'slack' ? slackBody : jsonBody)
     }
   } catch (err) {
     console.error('Webhook dispatch error:', err)
