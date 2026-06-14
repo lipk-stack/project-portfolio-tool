@@ -60,7 +60,7 @@ function getActionText(action: string, details?: string): string {
 }
 
 interface PortfolioEVM {
-  portfolio: { BAC: number; AC: number; EV: number; PV: number; CPI: number; SPI: number }
+  portfolio: { BAC: number; AC: number; EV: number; PV: number; CPI: number; SPI: number; SPIt: number | null; projectsBehindSchedule?: number }
 }
 
 export default function Dashboard() {
@@ -120,7 +120,7 @@ export default function Dashboard() {
             </div>
             <span className="text-xs text-gray-400">PMBOK metrics across all active projects</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
             <div>
               <div className="text-xs text-gray-500">BAC</div>
               <div className="text-lg font-bold text-gray-900">{formatCurrency(evm.portfolio.BAC)}</div>
@@ -144,6 +144,15 @@ export default function Dashboard() {
             <div>
               <div className="text-xs text-gray-500">SPI (schedule)</div>
               <div className={`text-lg font-bold ${evm.portfolio.SPI >= 1 ? 'text-green-600' : evm.portfolio.SPI >= 0.95 ? 'text-yellow-600' : 'text-red-600'}`}>{evm.portfolio.SPI.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500" title="Earned Schedule SPI(t) — time-based, stays meaningful past the planned end date">SPI(t) time</div>
+              {evm.portfolio.SPIt !== null ? (
+                <div className={`text-lg font-bold ${evm.portfolio.SPIt >= 1 ? 'text-green-600' : evm.portfolio.SPIt >= 0.95 ? 'text-yellow-600' : 'text-red-600'}`}>
+                  {evm.portfolio.SPIt.toFixed(2)}
+                  {!!evm.portfolio.projectsBehindSchedule && <span className="ml-1 text-xs font-normal text-gray-400">· {evm.portfolio.projectsBehindSchedule} behind</span>}
+                </div>
+              ) : <div className="text-lg font-bold text-gray-400">—</div>}
             </div>
           </div>
         </Card>

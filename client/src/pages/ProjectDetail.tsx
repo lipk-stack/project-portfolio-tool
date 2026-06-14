@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi } from '../api'
 import { getSocket } from '../realtime'
 import { useAuthStore } from '../store'
@@ -8,6 +8,7 @@ import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types
 import EVMDashboard from '../components/EVMDashboard'
 import ScenarioPlanner from '../components/ScenarioPlanner'
 import CustomFieldsManager from '../components/CustomFieldsManager'
+import ImportTasksModal from '../components/ImportTasksModal'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
@@ -48,6 +49,7 @@ export default function ProjectDetail() {
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus>('todo')
   const [exportOpen, setExportOpen] = useState(false)
   const [showFieldsManager, setShowFieldsManager] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -352,6 +354,12 @@ export default function ProjectDetail() {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+              >
+                <Upload size={14} /> Import
+              </button>
+              <button
                 onClick={() => setShowFieldsManager(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
               >
@@ -612,6 +620,14 @@ export default function ProjectDetail() {
       >
         <CustomFieldsManager projectId={project.id} />
       </Modal>
+
+      {showImport && (
+        <ImportTasksModal
+          projectId={project.id}
+          onClose={() => setShowImport(false)}
+          onImported={loadProject}
+        />
+      )}
     </div>
   )
 }

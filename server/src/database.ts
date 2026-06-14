@@ -287,6 +287,8 @@ function runMigrations() {
   addColumn('tasks', 'baseline_end', 'DATE')
   addColumn('tasks', 'baseline_hours', 'REAL')
   addColumn('tasks', 'sprint_id', 'INTEGER REFERENCES sprints(id)')
+  addColumn('tasks', 'recurrence', "TEXT DEFAULT 'none'")
+  addColumn('tasks', 'recurrence_until', 'DATE')
   addColumn('users', 'email_notifications', 'INTEGER DEFAULT 1')
   db.exec(`
     CREATE TABLE IF NOT EXISTS webhooks (

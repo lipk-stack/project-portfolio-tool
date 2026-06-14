@@ -175,6 +175,7 @@ router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) =>
       plannedFrac = Math.min(1, Math.max(0, daysBetween(s, now) / total))
     }
     const PV = BAC * plannedFrac
+    const es = start && end ? computeEarnedSchedule({ BAC, EV, start, end }) : null
     return {
       id: p.id,
       name: p.name,
@@ -182,6 +183,8 @@ router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) =>
       health: p.health,
       CPI: AC > 0 ? Number((EV / AC).toFixed(3)) : 1,
       SPI: PV > 0 ? Number((EV / PV).toFixed(3)) : 1,
+      SPIt: es ? es.SPIt : null,
+      forecastSlipDays: es ? es.forecastSlipDays : null,
       EV: Math.round(EV),
       AC: Math.round(AC),
       PV: Math.round(PV),
@@ -195,6 +198,14 @@ router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) =>
   const totalEV = summary.reduce((s, x) => s + x.EV, 0)
   const totalPV = summary.reduce((s, x) => s + x.PV, 0)
 
+  // Portfolio SPI(t): BAC-weighted mean of the projects that have a time signal.
+  const withEs = summary.filter(x => x.SPIt !== null)
+  const esWeight = withEs.reduce((s, x) => s + x.BAC, 0)
+  const portfolioSPIt = esWeight > 0
+    ? Number((withEs.reduce((s, x) => s + (x.SPIt as number) * x.BAC, 0) / esWeight).toFixed(3))
+    : null
+  const projectsBehind = withEs.filter(x => (x.SPIt as number) < 0.95).length
+
   res.json({
     portfolio: {
       BAC: totalBAC,
@@ -203,6 +214,8 @@ router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) =>
       PV: totalPV,
       CPI: totalAC > 0 ? Number((totalEV / totalAC).toFixed(3)) : 1,
       SPI: totalPV > 0 ? Number((totalEV / totalPV).toFixed(3)) : 1,
+      SPIt: portfolioSPIt,
+      projectsBehindSchedule: projectsBehind,
     },
     projects: summary,
   })

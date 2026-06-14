@@ -118,6 +118,8 @@ export interface Task {
   position: number
   sprint?: string
   story_points?: number
+  recurrence?: string
+  recurrence_until?: string
   tags: string[]
   subtask_count?: number
   done_subtask_count?: number

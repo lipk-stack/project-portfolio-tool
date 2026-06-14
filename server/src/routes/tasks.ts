@@ -6,8 +6,46 @@ import { saveCustomValues } from './customFields'
 import { createNotification } from '../lib/notify'
 import { emitToProject } from '../lib/realtime'
 import { dispatchWebhooks } from '../lib/webhookDispatcher'
+import { computeNextOccurrence, isValidRecurrence } from '../lib/recurrence'
+import { buildTaskImport, ImportUser } from '../lib/csvImport'
 
 const router = Router()
+
+// When a recurring task is completed, spawn the next occurrence: a fresh copy
+// (status todo, progress reset) with dates shifted forward one period. Returns
+// the new task id, or null if the series has ended. Best-effort: never throws.
+function materializeRecurrence(taskId: number, actorId: number): number | null {
+  try {
+    const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as Record<string, unknown> | undefined
+    if (!t) return null
+    const next = computeNextOccurrence({
+      start_date: (t.start_date as string) || null,
+      end_date: (t.end_date as string) || null,
+      recurrence: (t.recurrence as string) || null,
+      recurrence_until: (t.recurrence_until as string) || null,
+    })
+    if (!next) return null
+
+    const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(t.project_id) as { mp: number }).mp || 0
+    const result = db.prepare(`
+      INSERT INTO tasks (project_id, parent_id, name, description, status, priority, assignee_id,
+        start_date, end_date, estimated_hours, wbs_code, position, sprint, story_points, tags,
+        recurrence, recurrence_until)
+      VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      t.project_id, t.parent_id ?? null, t.name, t.description ?? null, t.priority, t.assignee_id ?? null,
+      next.start_date, next.end_date, t.estimated_hours ?? 0, t.wbs_code ?? null,
+      maxPos + 1, t.sprint ?? null, t.story_points ?? null, t.tags ?? null,
+      t.recurrence, t.recurrence_until ?? null
+    )
+    const newId = Number(result.lastInsertRowid)
+    db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
+      .run('project', t.project_id, actorId, 'task_recurred', JSON.stringify({ name: t.name, from_task: taskId, due: next.end_date }))
+    return newId
+  } catch {
+    return null
+  }
+}
 
 router.get('/project/:projectId', authenticate, (req: Request, res: Response) => {
   const tasks = db.prepare(`
@@ -66,21 +104,26 @@ router.get('/my-work', authenticate, (req: Request, res: Response) => {
 })
 
 router.post('/project/:projectId', authenticate, (req: Request, res: Response) => {
-  const { name, description, parent_id, status, priority, assignee_id, start_date, end_date, estimated_hours, wbs_code, position, sprint, story_points, tags } = req.body
+  const { name, description, parent_id, status, priority, assignee_id, start_date, end_date, estimated_hours, wbs_code, position, sprint, story_points, tags, recurrence, recurrence_until } = req.body
   if (!name) return res.status(400).json({ error: 'Task name required' })
+  if (recurrence !== undefined && recurrence !== null && !isValidRecurrence(recurrence)) {
+    return res.status(400).json({ error: 'Invalid recurrence (none|daily|weekly|monthly)' })
+  }
 
   const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(req.params.projectId) as { mp: number }).mp || 0
 
   const result = db.prepare(`
     INSERT INTO tasks (project_id, parent_id, name, description, status, priority, assignee_id,
-      start_date, end_date, estimated_hours, wbs_code, position, sprint, story_points, tags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      start_date, end_date, estimated_hours, wbs_code, position, sprint, story_points, tags,
+      recurrence, recurrence_until)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     req.params.projectId, parent_id || null, name, description || null,
     status || 'todo', priority || 'medium', assignee_id || null,
     start_date || null, end_date || null, estimated_hours || 0,
     wbs_code || null, position ?? (maxPos + 1), sprint || null,
-    story_points || null, tags ? JSON.stringify(tags) : null
+    story_points || null, tags ? JSON.stringify(tags) : null,
+    recurrence || 'none', recurrence_until || null
   )
 
   db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', req.params.projectId, req.user!.userId, 'task_created', JSON.stringify({ name }))
@@ -112,19 +155,25 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
   const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined
   if (!existing) return res.status(404).json({ error: 'Task not found' })
 
-  const { name, description, status, priority, assignee_id, start_date, end_date, estimated_hours, actual_hours, completion_percent, wbs_code, position, sprint, story_points, tags, is_critical } = req.body
+  const { name, description, status, priority, assignee_id, start_date, end_date, estimated_hours, actual_hours, completion_percent, wbs_code, position, sprint, story_points, tags, is_critical, recurrence, recurrence_until } = req.body
+  if (recurrence !== undefined && recurrence !== null && !isValidRecurrence(recurrence)) {
+    return res.status(400).json({ error: 'Invalid recurrence (none|daily|weekly|monthly)' })
+  }
 
   db.prepare(`
     UPDATE tasks SET name=?, description=?, status=?, priority=?, assignee_id=?,
       start_date=?, end_date=?, estimated_hours=?, actual_hours=?, completion_percent=?,
       wbs_code=?, position=?, sprint=?, story_points=?, tags=?, is_critical=?,
-      updated_at=CURRENT_TIMESTAMP
+      recurrence=?, recurrence_until=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=?
   `).run(name, description || null, status, priority, assignee_id || null,
     start_date || null, end_date || null, estimated_hours || 0, actual_hours || 0,
     completion_percent || 0, wbs_code || null, position ?? existing.position,
     sprint || null, story_points || null, tags ? JSON.stringify(tags) : null,
-    is_critical ? 1 : 0, req.params.id)
+    is_critical ? 1 : 0,
+    recurrence ?? existing.recurrence ?? 'none',
+    recurrence_until !== undefined ? (recurrence_until || null) : (existing.recurrence_until ?? null),
+    req.params.id)
 
   if (existing.status !== status) {
     db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)').run('project', existing.project_id, req.user!.userId, 'task_status_changed', JSON.stringify({ task: name, from: existing.status, to: status }))
@@ -151,10 +200,17 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
     runAutomations({ type: 'task_assigned', projectId, task: eventTask }, req.user!.userId)
   }
 
+  // Spawn the next occurrence when a recurring task is newly completed.
+  let recurred_task_id: number | null = null
+  if (existing.status !== 'done' && status === 'done') {
+    recurred_task_id = materializeRecurrence(Number(req.params.id), req.user!.userId)
+    if (recurred_task_id) emitToProject(projectId, 'task_changed', { action: 'created', task_id: recurred_task_id, actor_id: req.user!.userId })
+  }
+
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)
   emitToProject(projectId, 'task_changed', { action: 'updated', task_id: Number(req.params.id), actor_id: req.user!.userId })
   dispatchWebhooks('task.updated', projectId, { task, previous_status: existing.status })
-  res.json({ task })
+  res.json({ task, recurred_task_id })
 })
 
 // Status-only update — unlike PUT (full replace), this is safe for quick
@@ -184,10 +240,17 @@ router.patch('/:id/status', authenticate, (req: Request, res: Response) => {
     runAutomations({ type: 'task_status_changed', projectId, task: eventTask }, req.user!.userId)
   }
 
+  // Spawn the next occurrence when a recurring task is newly completed.
+  let recurred_task_id: number | null = null
+  if (existing.status !== 'done' && status === 'done') {
+    recurred_task_id = materializeRecurrence(Number(req.params.id), req.user!.userId)
+    if (recurred_task_id) emitToProject(projectId, 'task_changed', { action: 'created', task_id: recurred_task_id, actor_id: req.user!.userId })
+  }
+
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id)
   emitToProject(projectId, 'task_changed', { action: 'updated', task_id: Number(req.params.id), actor_id: req.user!.userId })
   dispatchWebhooks('task.updated', projectId, { task, previous_status: existing.status })
-  res.json({ task })
+  res.json({ task, recurred_task_id })
 })
 
 router.delete('/:id', authenticate, (req: Request, res: Response) => {
@@ -245,6 +308,56 @@ router.post('/:id/time', authenticate, (req: Request, res: Response) => {
 
   const entry = db.prepare('SELECT * FROM time_entries WHERE id = ?').get(result.lastInsertRowid)
   res.status(201).json({ entry })
+})
+
+// CSV import — dry-run preview by default; pass commit:true to insert the
+// valid rows. Returns the same validation payload either way so the UI can
+// preview, then commit. Only rows with zero errors are written.
+router.post('/project/:projectId/import', authenticate, (req: Request, res: Response) => {
+  const { csv, commit } = req.body
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv (string) required' })
+
+  const projectId = Number(req.params.projectId)
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+
+  const users = db.prepare('SELECT id, name, email FROM users').all() as ImportUser[]
+  const result = buildTaskImport(csv, users)
+
+  let imported = 0
+  if (commit === true && result.validCount > 0) {
+    const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(projectId) as { mp: number }).mp || 0
+    const insert = db.prepare(`
+      INSERT INTO tasks (project_id, name, description, status, priority, assignee_id,
+        start_date, end_date, estimated_hours, story_points, wbs_code, position)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const insertMany = db.transaction(() => {
+      let pos = maxPos
+      for (const row of result.rows) {
+        if (row.errors.length > 0) continue
+        pos++
+        insert.run(projectId, row.name, row.description, row.status, row.priority, row.assignee_id,
+          row.start_date, row.end_date, row.estimated_hours, row.story_points, row.wbs_code, pos)
+        imported++
+      }
+    })
+    insertMany()
+    db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
+      .run('project', projectId, req.user!.userId, 'tasks_imported', JSON.stringify({ count: imported }))
+    emitToProject(projectId, 'task_changed', { action: 'imported', actor_id: req.user!.userId })
+  }
+
+  res.json({
+    committed: commit === true,
+    imported,
+    headers: result.headers,
+    mappedColumns: result.mappedColumns,
+    unmappedHeaders: result.unmappedHeaders,
+    validCount: result.validCount,
+    errorCount: result.errorCount,
+    rows: result.rows,
+  })
 })
 
 export default router

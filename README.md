@@ -25,6 +25,8 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Risk Register** | Probability/impact matrix, severity scoring, mitigation plans |
 | **Automations** | No-code rules engine: when task/risk events occur (with conditions), notify people, set priority, or add comments |
 | **Saved Views** | Save named filter combinations on the Projects page, with one-click recall |
+| **CSV Task Import** | Bulk-import tasks from Excel / MS Project / Jira / Asana exports; smart header mapping, per-row validation, dry-run preview before commit |
+| **Recurring Tasks** | Daily/weekly/monthly recurrence; completing a task auto-spawns the next occurrence with dates shifted forward (duration preserved, optional end date) |
 | **PDF Reports** | One-page executive status report per project (EVM KPIs, milestones, top risks) |
 | **Export** | One-click CSV export of projects/tasks/risks/budget/time-entries, full project as JSON |
 | **Analytics & Reports** | Portfolio performance, task velocity, hours logged, department utilization |
@@ -173,6 +175,7 @@ Completed in iteration 3: PDF executive reports, workflow automation rules engin
 Completed in iteration 4: custom fields, what-if scenario planning, portfolio briefing PDF, personal API tokens.
 Completed in iteration 5: real-time collaboration (WebSockets), email notifications (SMTP), outbound webhooks with HMAC signing, audit log UI, task dependency editor with cycle detection.
 Completed in iteration 6: earned schedule metrics (SPI(t), forecast completion), My Work page, Slack-format webhooks, project created/updated webhook events, status-only task PATCH, live sprint board updates.
+Completed in iteration 7: CSV task import (smart header mapping + dry-run validation preview), recurring tasks (daily/weekly/monthly auto-spawn on completion), portfolio-level Earned Schedule rollup (BAC-weighted SPI(t) + projects-behind count on the dashboard).
 
 Planned for upcoming iterations:
 - [ ] Inbound integrations (Jira/GitHub import, MS Teams, Outlook)

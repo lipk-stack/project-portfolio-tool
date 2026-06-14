@@ -122,10 +122,26 @@ export default function TaskForm({ task, projectId, onSubmit, onCancel, loading,
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">WBS Code</label>
-        <input {...register('wbs_code')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 1.2.3" />
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">WBS Code</label>
+          <input {...register('wbs_code')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. 1.2.3" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Repeat</label>
+          <select {...register('recurrence')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Repeat Until</label>
+          <input type="date" {...register('recurrence_until')} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
       </div>
+      <p className="text-xs text-gray-400 -mt-2">Repeating tasks spawn the next occurrence (dates shifted forward) when marked Done.</p>
 
       {projectId && (
         <div>

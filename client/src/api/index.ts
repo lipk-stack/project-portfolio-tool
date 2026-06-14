@@ -81,6 +81,7 @@ export const tasksApi = {
   logTime: (id: number, data: object) => api.post(`/tasks/${id}/time`, data),
   myWork: () => api.get('/tasks/my-work'),
   updateStatus: (id: number, status: string) => api.patch(`/tasks/${id}/status`, { status }),
+  importCsv: (projectId: number, csv: string, commit: boolean) => api.post(`/tasks/project/${projectId}/import`, { csv, commit }),
 }
 
 export const resourcesApi = {
