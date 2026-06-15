@@ -8,7 +8,7 @@ import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types
 import EVMDashboard from '../components/EVMDashboard'
 import ScenarioPlanner from '../components/ScenarioPlanner'
 import CustomFieldsManager from '../components/CustomFieldsManager'
-import ImportTasksModal from '../components/ImportTasksModal'
+import ImportModal, { PreviewRow } from '../components/ImportModal'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
@@ -50,6 +50,7 @@ export default function ProjectDetail() {
   const [exportOpen, setExportOpen] = useState(false)
   const [showFieldsManager, setShowFieldsManager] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showRiskImport, setShowRiskImport] = useState(false)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -521,6 +522,12 @@ export default function ProjectDetail() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">{risks.length} Risks</h3>
+            <button
+              onClick={() => setShowRiskImport(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+            >
+              <Upload size={14} /> Import
+            </button>
           </div>
           <div className="grid grid-cols-1 gap-3">
             {risks.map(risk => (
@@ -622,12 +629,64 @@ export default function ProjectDetail() {
       </Modal>
 
       {showImport && (
-        <ImportTasksModal
-          projectId={project.id}
+        <ImportModal
+          title="Import Tasks from CSV"
+          noun="task"
+          description={<>Paste or upload a CSV exported from Excel, MS Project, Jira, or Asana. Recognized columns: <span className="font-mono text-xs">name, description, status, priority, assignee, start_date, end_date, estimated_hours, story_points, wbs_code</span>. Common header aliases (Task Name, Owner, Due Date, Points…) are mapped automatically. Only <strong>name</strong> is required.</>}
+          sample={TASK_SAMPLE}
+          templateUrl={tasksApi.importTemplateUrl()}
+          templateName="task-import-template.csv"
+          columns={TASK_COLUMNS}
+          preview={csv => tasksApi.importCsv(project.id, csv, false)}
+          commit={csv => tasksApi.importCsv(project.id, csv, true)}
           onClose={() => setShowImport(false)}
+          onImported={loadProject}
+        />
+      )}
+
+      {showRiskImport && (
+        <ImportModal
+          title="Import Risks from CSV"
+          noun="risk"
+          description={<>Paste or upload a CSV of risks. Recognized columns: <span className="font-mono text-xs">title, description, category, probability, impact, status, response, mitigation_plan, owner, identified_date, target_date</span>. Aliases (Risk, Likelihood, Severity, Mitigation…) are mapped automatically. Only <strong>title</strong> is required; the score is derived from probability × impact.</>}
+          sample={RISK_SAMPLE}
+          templateUrl={risksApi.importTemplateUrl()}
+          templateName="risk-import-template.csv"
+          columns={RISK_COLUMNS}
+          preview={csv => risksApi.importCsv(project.id, csv, false)}
+          commit={csv => risksApi.importCsv(project.id, csv, true)}
+          onClose={() => setShowRiskImport(false)}
           onImported={loadProject}
         />
       )}
     </div>
   )
 }
+
+const TASK_SAMPLE = `name,assignee,start_date,end_date,priority,estimated_hours,status
+Kickoff workshop,john.manager@demo.com,2026-07-01,2026-07-02,high,8,todo
+Draft requirements,Alex Rivera,2026-07-03,2026-07-10,medium,24,in_progress
+Vendor evaluation,,2026-07-05,2026-07-20,low,16,todo`
+
+const RISK_SAMPLE = `title,category,probability,impact,status,owner,target_date
+Vendor delivery delay,schedule,high,high,open,john.manager@demo.com,2026-09-30
+Budget overrun,budget,medium,high,mitigating,Alex Rivera,2026-10-31
+Scope creep,scope,high,medium,open,,`
+
+const TASK_COLUMNS = [
+  { label: 'Name', render: (r: PreviewRow) => (r.name as string) || <span className="text-red-500 italic">(missing)</span> },
+  { label: 'Status', render: (r: PreviewRow) => r.status as string },
+  { label: 'Priority', render: (r: PreviewRow) => r.priority as string },
+  { label: 'Assignee', render: (r: PreviewRow) => (r.assignee as string) || '—' },
+  { label: 'Dates', render: (r: PreviewRow) => <span className="text-gray-500">{(r.start_date as string) || '…'} → {(r.end_date as string) || '…'}</span> },
+  { label: 'Hrs', render: (r: PreviewRow) => (r.estimated_hours as number) || '' },
+]
+
+const RISK_COLUMNS = [
+  { label: 'Title', render: (r: PreviewRow) => (r.title as string) || <span className="text-red-500 italic">(missing)</span> },
+  { label: 'Category', render: (r: PreviewRow) => r.category as string },
+  { label: 'Prob', render: (r: PreviewRow) => r.probability as string },
+  { label: 'Impact', render: (r: PreviewRow) => r.impact as string },
+  { label: 'Score', render: (r: PreviewRow) => <span className="font-medium">{r.score as number}</span> },
+  { label: 'Owner', render: (r: PreviewRow) => (r.owner as string) || '—' },
+]

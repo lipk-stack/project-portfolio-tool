@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCsv, buildTaskImport } from './csvImport'
+import { parseCsv, buildTaskImport, buildRiskImport } from './csvImport'
 
 describe('parseCsv', () => {
   it('parses a simple table', () => {
@@ -84,5 +84,63 @@ describe('buildTaskImport', () => {
     const res = buildTaskImport('name,foobar\nX,1', users)
     expect(res.unmappedHeaders).toContain('foobar')
     expect(buildTaskImport('', users).rows).toEqual([])
+  })
+})
+
+describe('buildRiskImport', () => {
+  const users = [
+    { id: 1, name: 'John Martinez', email: 'john.manager@demo.com' },
+    { id: 2, name: 'Alex Rivera', email: 'alex.dev@demo.com' },
+  ]
+
+  it('maps aliases, derives score, and resolves the owner', () => {
+    const csv = 'Risk,Likelihood,Severity,Owner,Status\nVendor delay,high,critical,alex.dev@demo.com,mitigating'
+    const res = buildRiskImport(csv, users)
+    expect(res.validCount).toBe(1)
+    const row = res.rows[0]
+    expect(row.title).toBe('Vendor delay')
+    expect(row.probability).toBe('high')
+    expect(row.impact).toBe('critical')
+    expect(row.score).toBe(3 * 4)
+    expect(row.owner_id).toBe(2)
+    expect(row.status).toBe('mitigating')
+  })
+
+  it('applies defaults when optional columns are blank', () => {
+    const res = buildRiskImport('title\nUnscoped risk', users)
+    const row = res.rows[0]
+    expect(row.probability).toBe('medium')
+    expect(row.impact).toBe('medium')
+    expect(row.score).toBe(4)
+    expect(row.status).toBe('open')
+    expect(row.category).toBe('general')
+    expect(row.errors).toEqual([])
+  })
+
+  it('flags every invalid field on a row', () => {
+    const csv = 'title,probability,impact,status,response,owner,identified_date\n,zzz,nope,bogus,whatever,Ghost User,2026-13-99'
+    const res = buildRiskImport(csv, users)
+    const row = res.rows[0]
+    expect(res.errorCount).toBe(1)
+    expect(row.errors.some(e => /title/.test(e))).toBe(true)
+    expect(row.errors.some(e => /probability/.test(e))).toBe(true)
+    expect(row.errors.some(e => /impact/.test(e))).toBe(true)
+    expect(row.errors.some(e => /status/.test(e))).toBe(true)
+    expect(row.errors.some(e => /response/.test(e))).toBe(true)
+    expect(row.errors.some(e => /owner/.test(e))).toBe(true)
+    expect(row.errors.some(e => /date/.test(e))).toBe(true)
+  })
+
+  it('normalizes spaced/hyphenated status and validates response enum', () => {
+    const res = buildRiskImport('title,status,response\nA,In Progress,mitigate', users)
+    // "In Progress" is not a valid risk status -> error, falls back to open
+    expect(res.rows[0].errors.some(e => /status/.test(e))).toBe(true)
+    const ok = buildRiskImport('title,status,response\nB,closed,transfer', users)
+    expect(ok.validCount).toBe(1)
+    expect(ok.rows[0].response).toBe('transfer')
+  })
+
+  it('returns empty result for empty input', () => {
+    expect(buildRiskImport('', users).rows).toEqual([])
   })
 })

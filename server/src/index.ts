@@ -30,6 +30,7 @@ import scenarioRoutes from './routes/scenario'
 import tokensRoutes from './routes/tokens'
 import webhooksRoutes from './routes/webhooks'
 import activityRoutes from './routes/activity'
+import attachmentsRoutes from './routes/attachments'
 
 initializeDatabase()
 
@@ -46,7 +47,8 @@ app.use(helmet({
   contentSecurityPolicy: isProduction ? undefined : false,
   crossOriginEmbedderPolicy: false,
 }))
-app.use(express.json({ limit: '10mb' }))
+// 20mb accommodates base64-encoded file uploads up to the 10MB decoded cap.
+app.use(express.json({ limit: '20mb' }))
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
@@ -73,6 +75,7 @@ app.use('/api/scenario', scenarioRoutes)
 app.use('/api/tokens', tokensRoutes)
 app.use('/api/webhooks', webhooksRoutes)
 app.use('/api/activity', activityRoutes)
+app.use('/api/attachments', attachmentsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

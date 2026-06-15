@@ -205,3 +205,177 @@ export function buildTaskImport(csv: string, users: ImportUser[]): TaskImportRes
     errorCount,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Risk register import — same shape/contract as the task importer.
+// ---------------------------------------------------------------------------
+
+const RISK_LEVELS = ['low', 'medium', 'high', 'critical']
+const RISK_STATUSES = ['open', 'mitigating', 'monitoring', 'closed', 'accepted']
+const RISK_RESPONSES = ['avoid', 'mitigate', 'transfer', 'accept']
+const LEVEL_SCORE: Record<string, number> = { low: 1, medium: 2, high: 3, critical: 4 }
+
+const RISK_HEADER_ALIASES: Record<string, string> = {
+  'title': 'title', 'risk': 'title', 'risk title': 'title', 'name': 'title', 'summary': 'title',
+  'description': 'description', 'notes': 'description', 'details': 'description',
+  'category': 'category', 'type': 'category',
+  'probability': 'probability', 'likelihood': 'probability', 'prob': 'probability',
+  'impact': 'impact', 'severity': 'impact', 'consequence': 'impact',
+  'status': 'status', 'state': 'status',
+  'response': 'response', 'strategy': 'response', 'response strategy': 'response',
+  'mitigation_plan': 'mitigation_plan', 'mitigation': 'mitigation_plan', 'mitigation plan': 'mitigation_plan', 'plan': 'mitigation_plan',
+  'owner': 'owner', 'owner_name': 'owner', 'assignee': 'owner', 'assigned to': 'owner', 'responsible': 'owner',
+  'identified_date': 'identified_date', 'identified date': 'identified_date', 'identified': 'identified_date', 'date identified': 'identified_date',
+  'target_date': 'target_date', 'target date': 'target_date', 'due date': 'target_date', 'due': 'target_date', 'resolution date': 'target_date',
+}
+
+const RISK_FIELD_KEYS = ['title', 'description', 'category', 'probability', 'impact', 'status', 'response', 'mitigation_plan', 'owner', 'identified_date', 'target_date'] as const
+type RiskFieldKey = typeof RISK_FIELD_KEYS[number]
+
+export interface ParsedRiskRow {
+  row: number
+  title: string
+  description: string | null
+  category: string
+  probability: string
+  impact: string
+  score: number
+  status: string
+  response: string | null
+  mitigation_plan: string | null
+  owner: string | null
+  owner_id: number | null
+  identified_date: string | null
+  target_date: string | null
+  errors: string[]
+}
+
+export interface RiskImportResult {
+  headers: string[]
+  mappedColumns: Record<string, string>
+  unmappedHeaders: string[]
+  rows: ParsedRiskRow[]
+  validCount: number
+  errorCount: number
+}
+
+/**
+ * Parse + validate a CSV of risks against the project's users. Never throws;
+ * problems are reported per-row. Only `title` is required; probability/impact
+ * default to medium and the score is derived from them.
+ */
+export function buildRiskImport(csv: string, users: ImportUser[]): RiskImportResult {
+  const table = parseCsv(csv)
+  if (table.length === 0) {
+    return { headers: [], mappedColumns: {}, unmappedHeaders: [], rows: [], validCount: 0, errorCount: 0 }
+  }
+
+  const headers = table[0].map(h => h.trim())
+  const mappedColumns: Record<string, string> = {}
+  const unmappedHeaders: string[] = []
+  const colIndex: Partial<Record<RiskFieldKey, number>> = {}
+
+  headers.forEach((h, idx) => {
+    const key = RISK_HEADER_ALIASES[h.toLowerCase().trim()]
+    if (key) {
+      mappedColumns[h] = key
+      if (colIndex[key as RiskFieldKey] === undefined) colIndex[key as RiskFieldKey] = idx
+    } else if (h) {
+      unmappedHeaders.push(h)
+    }
+  })
+
+  const userByKey = new Map<string, number>()
+  for (const u of users) {
+    if (u.name) userByKey.set(u.name.toLowerCase().trim(), u.id)
+    if (u.email) userByKey.set(u.email.toLowerCase().trim(), u.id)
+  }
+
+  const cell = (cols: string[], key: RiskFieldKey): string => {
+    const i = colIndex[key]
+    return i === undefined || i >= cols.length ? '' : cols[i]
+  }
+
+  const rows: ParsedRiskRow[] = []
+  for (let r = 1; r < table.length; r++) {
+    const cols = table[r]
+    const errors: string[] = []
+
+    const title = cell(cols, 'title').trim()
+    if (!title) errors.push('title is required')
+
+    let probability = cell(cols, 'probability').trim().toLowerCase()
+    if (!probability) probability = 'medium'
+    else if (!RISK_LEVELS.includes(probability)) { errors.push(`invalid probability "${probability}"`); probability = 'medium' }
+
+    let impact = cell(cols, 'impact').trim().toLowerCase()
+    if (!impact) impact = 'medium'
+    else if (!RISK_LEVELS.includes(impact)) { errors.push(`invalid impact "${impact}"`); impact = 'medium' }
+
+    let status = cell(cols, 'status').trim().toLowerCase().replace(/[\s-]+/g, '_')
+    if (!status) status = 'open'
+    else if (!RISK_STATUSES.includes(status)) { errors.push(`invalid status "${status}"`); status = 'open' }
+
+    let response: string | null = cell(cols, 'response').trim().toLowerCase() || null
+    if (response && !RISK_RESPONSES.includes(response)) { errors.push(`invalid response "${response}"`); response = null }
+
+    const ownerRaw = cell(cols, 'owner').trim()
+    let owner_id: number | null = null
+    if (ownerRaw) {
+      const found = userByKey.get(ownerRaw.toLowerCase())
+      if (found === undefined) errors.push(`unknown owner "${ownerRaw}"`)
+      else owner_id = found
+    }
+
+    const identified = parseDate(cell(cols, 'identified_date'))
+    if (identified.error) errors.push(identified.error)
+    const target = parseDate(cell(cols, 'target_date'))
+    if (target.error) errors.push(target.error)
+
+    const categoryRaw = cell(cols, 'category').trim().toLowerCase()
+    const descRaw = cell(cols, 'description').trim()
+    const mitRaw = cell(cols, 'mitigation_plan').trim()
+
+    rows.push({
+      row: r,
+      title,
+      description: descRaw || null,
+      category: categoryRaw || 'general',
+      probability,
+      impact,
+      score: LEVEL_SCORE[probability] * LEVEL_SCORE[impact],
+      status,
+      response,
+      mitigation_plan: mitRaw || null,
+      owner: ownerRaw || null,
+      owner_id,
+      identified_date: identified.value,
+      target_date: target.value,
+      errors,
+    })
+  }
+
+  const errorCount = rows.filter(r => r.errors.length > 0).length
+  return {
+    headers,
+    mappedColumns,
+    unmappedHeaders,
+    rows,
+    validCount: rows.length - errorCount,
+    errorCount,
+  }
+}
+
+// CSV templates offered as downloads from the import dialogs.
+export const TASK_IMPORT_TEMPLATE = `name,description,assignee,status,priority,start_date,end_date,estimated_hours,story_points,wbs_code
+Kickoff workshop,Align stakeholders on goals,john.manager@demo.com,todo,high,2026-07-01,2026-07-02,8,3,1.0
+Draft requirements,Capture functional requirements,Alex Rivera,in_progress,medium,2026-07-03,2026-07-10,24,5,2.0
+Vendor evaluation,,,todo,low,2026-07-05,2026-07-20,16,,3.0
+`
+
+export const RISK_IMPORT_TEMPLATE = `title,description,category,probability,impact,status,response,mitigation_plan,owner,identified_date,target_date
+Vendor delivery delay,Key vendor may miss the integration deadline,schedule,high,high,open,mitigate,Add a second supplier and weekly checkpoints,john.manager@demo.com,2026-07-01,2026-09-30
+Budget overrun,Cloud costs trending above plan,budget,medium,high,mitigating,accept,Enable cost alerts and right-size instances,Alex Rivera,2026-07-05,2026-10-31
+Scope creep,Stakeholders adding features mid-sprint,scope,high,medium,open,avoid,Enforce change control,,2026-07-10,
+`
+

@@ -3,6 +3,7 @@ import { db } from '../database'
 import { authenticate } from '../middleware/auth'
 import { runAutomations } from '../lib/automationRunner'
 import { dispatchWebhooks } from '../lib/webhookDispatcher'
+import { buildRiskImport, ImportUser, RISK_IMPORT_TEMPLATE } from '../lib/csvImport'
 
 const router = Router()
 
@@ -11,6 +12,13 @@ const LEVEL_MAP: Record<string, number> = { low: 1, medium: 2, high: 3, critical
 function calcScore(probability: string, impact: string): number {
   return (LEVEL_MAP[probability] || 2) * (LEVEL_MAP[impact] || 2)
 }
+
+// Downloadable CSV template for the risk importer.
+router.get('/import/template', authenticate, (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/csv')
+  res.setHeader('Content-Disposition', 'attachment; filename="risk-import-template.csv"')
+  res.send(RISK_IMPORT_TEMPLATE)
+})
 
 router.get('/project/:projectId', authenticate, (req: Request, res: Response) => {
   const risks = db.prepare(`
@@ -69,6 +77,53 @@ router.put('/:id', authenticate, (req: Request, res: Response) => {
 router.delete('/:id', authenticate, (req: Request, res: Response) => {
   db.prepare('DELETE FROM risks WHERE id = ?').run(req.params.id)
   res.json({ success: true })
+})
+
+// CSV import — dry-run preview by default; pass commit:true to insert the
+// valid rows. Mirrors the task importer.
+router.post('/project/:projectId/import', authenticate, (req: Request, res: Response) => {
+  const { csv, commit } = req.body
+  if (typeof csv !== 'string' || !csv.trim()) return res.status(400).json({ error: 'csv (string) required' })
+
+  const projectId = Number(req.params.projectId)
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+
+  const users = db.prepare('SELECT id, name, email FROM users').all() as ImportUser[]
+  const result = buildRiskImport(csv, users)
+
+  let imported = 0
+  if (commit === true && result.validCount > 0) {
+    const insert = db.prepare(`
+      INSERT INTO risks (project_id, title, description, category, probability, impact, score,
+        status, response, mitigation_plan, owner_id, identified_date, target_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const today = new Date().toISOString().split('T')[0]
+    const insertMany = db.transaction(() => {
+      for (const row of result.rows) {
+        if (row.errors.length > 0) continue
+        insert.run(projectId, row.title, row.description, row.category, row.probability, row.impact, row.score,
+          row.status, row.response, row.mitigation_plan, row.owner_id ?? req.user!.userId,
+          row.identified_date ?? today, row.target_date)
+        imported++
+      }
+    })
+    insertMany()
+    db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
+      .run('project', projectId, req.user!.userId, 'risks_imported', JSON.stringify({ count: imported }))
+  }
+
+  res.json({
+    committed: commit === true,
+    imported,
+    headers: result.headers,
+    mappedColumns: result.mappedColumns,
+    unmappedHeaders: result.unmappedHeaders,
+    validCount: result.validCount,
+    errorCount: result.errorCount,
+    rows: result.rows,
+  })
 })
 
 router.get('/portfolio/summary', authenticate, (_req: Request, res: Response) => {

@@ -25,7 +25,8 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Risk Register** | Probability/impact matrix, severity scoring, mitigation plans |
 | **Automations** | No-code rules engine: when task/risk events occur (with conditions), notify people, set priority, or add comments |
 | **Saved Views** | Save named filter combinations on the Projects page, with one-click recall |
-| **CSV Task Import** | Bulk-import tasks from Excel / MS Project / Jira / Asana exports; smart header mapping, per-row validation, dry-run preview before commit |
+| **CSV Bulk Import** | Bulk-import **tasks and risks** from Excel / MS Project / Jira / Asana exports; smart header mapping, per-row validation, dry-run preview, and downloadable CSV templates — only error-free rows are committed |
+| **File Attachments** | Attach files (up to 10 MB) to any task with authenticated upload/download; stored alongside the database (Docker volume / gitignored data dir) |
 | **Recurring Tasks** | Daily/weekly/monthly recurrence; completing a task auto-spawns the next occurrence with dates shifted forward (duration preserved, optional end date) |
 | **PDF Reports** | One-page executive status report per project (EVM KPIs, milestones, top risks) |
 | **Export** | One-click CSV export of projects/tasks/risks/budget/time-entries, full project as JSON |
@@ -176,6 +177,7 @@ Completed in iteration 4: custom fields, what-if scenario planning, portfolio br
 Completed in iteration 5: real-time collaboration (WebSockets), email notifications (SMTP), outbound webhooks with HMAC signing, audit log UI, task dependency editor with cycle detection.
 Completed in iteration 6: earned schedule metrics (SPI(t), forecast completion), My Work page, Slack-format webhooks, project created/updated webhook events, status-only task PATCH, live sprint board updates.
 Completed in iteration 7: CSV task import (smart header mapping + dry-run validation preview), recurring tasks (daily/weekly/monthly auto-spawn on completion), portfolio-level Earned Schedule rollup (BAC-weighted SPI(t) + projects-behind count on the dashboard).
+Completed in iteration 8: file attachments on tasks (≤10 MB, authenticated upload/download, stored in the data dir), CSV risk import (shared validation/preview engine), downloadable CSV templates for the task & risk importers.
 
 Planned for upcoming iterations:
 - [ ] Inbound integrations (Jira/GitHub import, MS Teams, Outlook)

@@ -10,6 +10,10 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true })
 }
 
+// Data directory (alongside the SQLite file) — used for file uploads too, so
+// attachments live in the same gitignored/volume-mounted location as the db.
+export const dataDir = dbDir
+
 export const db = new Database(dbPath)
 
 db.pragma('journal_mode = WAL')
@@ -257,6 +261,18 @@ export function initializeDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      mime TEXT,
+      size INTEGER DEFAULT 0,
+      storage_path TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee_id);
     CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_type, entity_id);
@@ -306,6 +322,20 @@ function runMigrations() {
     )
   `)
   addColumn('webhooks', 'format', "TEXT DEFAULT 'json'") // table exists by now; upgrades It.5 DBs
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      mime TEXT,
+      size INTEGER DEFAULT 0,
+      storage_path TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_webhooks_enabled ON webhooks(enabled)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(project_id)')

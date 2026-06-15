@@ -82,6 +82,14 @@ export const tasksApi = {
   myWork: () => api.get('/tasks/my-work'),
   updateStatus: (id: number, status: string) => api.patch(`/tasks/${id}/status`, { status }),
   importCsv: (projectId: number, csv: string, commit: boolean) => api.post(`/tasks/project/${projectId}/import`, { csv, commit }),
+  importTemplateUrl: () => '/api/tasks/import/template',
+}
+
+export const attachmentsApi = {
+  list: (taskId: number) => api.get(`/attachments/task/${taskId}`),
+  upload: (taskId: number, data: { filename: string; mime: string; data: string }) => api.post(`/attachments/task/${taskId}`, data),
+  delete: (id: number) => api.delete(`/attachments/${id}`),
+  downloadUrl: (id: number) => `/api/attachments/${id}/download`,
 }
 
 export const resourcesApi = {
@@ -99,6 +107,8 @@ export const risksApi = {
   update: (id: number, data: object) => api.put(`/risks/${id}`, data),
   delete: (id: number) => api.delete(`/risks/${id}`),
   portfolioSummary: () => api.get('/risks/portfolio/summary'),
+  importCsv: (projectId: number, csv: string, commit: boolean) => api.post(`/risks/project/${projectId}/import`, { csv, commit }),
+  importTemplateUrl: () => '/api/risks/import/template',
 }
 
 export const budgetApi = {

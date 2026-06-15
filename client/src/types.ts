@@ -128,6 +128,18 @@ export interface Task {
   updated_at: string
 }
 
+export interface Attachment {
+  id: number
+  task_id: number
+  project_id?: number
+  filename: string
+  mime?: string
+  size: number
+  uploaded_by?: number
+  uploader_name?: string
+  created_at: string
+}
+
 export interface EVMMetrics {
   BAC: number; AC: number; EV: number; PV: number
   CV: number; SV: number

@@ -7,7 +7,7 @@ import { createNotification } from '../lib/notify'
 import { emitToProject } from '../lib/realtime'
 import { dispatchWebhooks } from '../lib/webhookDispatcher'
 import { computeNextOccurrence, isValidRecurrence } from '../lib/recurrence'
-import { buildTaskImport, ImportUser } from '../lib/csvImport'
+import { buildTaskImport, ImportUser, TASK_IMPORT_TEMPLATE } from '../lib/csvImport'
 
 const router = Router()
 
@@ -77,6 +77,13 @@ router.get('/project/:projectId', authenticate, (req: Request, res: Response) =>
   }))
 
   res.json({ tasks: tasksWithDeps, dependencies })
+})
+
+// Downloadable CSV template for the task importer.
+router.get('/import/template', authenticate, (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/csv')
+  res.setHeader('Content-Disposition', 'attachment; filename="task-import-template.csv"')
+  res.send(TASK_IMPORT_TEMPLATE)
 })
 
 // Cross-project view of the current user's open tasks, for the My Work page.

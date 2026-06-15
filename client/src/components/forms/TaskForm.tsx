@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { Task, CustomField } from '../../types'
 import { resourcesApi, customFieldsApi, tasksApi } from '../../api'
 import CommentsPanel from '../CommentsPanel'
+import AttachmentsPanel from '../AttachmentsPanel'
 
 interface TaskFormProps {
   task?: Partial<Task>
@@ -205,6 +206,12 @@ export default function TaskForm({ task, projectId, onSubmit, onCancel, loading,
           {loading ? 'Saving...' : task?.id ? 'Update Task' : 'Create Task'}
         </button>
       </div>
+
+      {task?.id && (
+        <div className="border-t border-gray-100 pt-4">
+          <AttachmentsPanel taskId={task.id} />
+        </div>
+      )}
 
       {task?.id && (
         <div className="border-t border-gray-100 pt-4">
