@@ -31,6 +31,7 @@ import tokensRoutes from './routes/tokens'
 import webhooksRoutes from './routes/webhooks'
 import activityRoutes from './routes/activity'
 import attachmentsRoutes from './routes/attachments'
+import insightsRoutes from './routes/insights'
 
 initializeDatabase()
 
@@ -76,6 +77,7 @@ app.use('/api/tokens', tokensRoutes)
 app.use('/api/webhooks', webhooksRoutes)
 app.use('/api/activity', activityRoutes)
 app.use('/api/attachments', attachmentsRoutes)
+app.use('/api/insights', insightsRoutes)
 
 if (isProduction) {
   const publicDir = path.join(__dirname, '../public')

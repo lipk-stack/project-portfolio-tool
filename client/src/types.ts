@@ -4,6 +4,34 @@ export type Health = 'green' | 'yellow' | 'red'
 export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'blocked'
 export type RiskLevel = 'low' | 'medium' | 'high'
 
+export type Rag = 'green' | 'amber' | 'red'
+
+export interface HealthFactor {
+  key: 'schedule' | 'cost' | 'risk' | 'execution'
+  label: string
+  rag: Rag | 'na'
+  penalty: number
+  detail: string
+}
+
+export interface ProjectHealth {
+  id: number
+  name: string
+  color: string
+  score: number
+  rag: Rag
+  cpi: number | null
+  factors: HealthFactor[]
+  headline: string
+  summary: string
+}
+
+export interface PortfolioInsights {
+  overall: { score: number; rag: Rag; projectCount: number; counts: { green: number; amber: number; red: number } }
+  needsAttention: Array<{ id: number; name: string; score: number; rag: Rag; color: string; headline: string }>
+  projects: Array<{ id: number; name: string; color: string; score: number; rag: Rag; cpi: number | null; priority: string; factors: HealthFactor[] }>
+}
+
 export interface User {
   id: number
   email: string

@@ -92,6 +92,11 @@ export const attachmentsApi = {
   downloadUrl: (id: number) => `/api/attachments/${id}/download`,
 }
 
+export const insightsApi = {
+  project: (id: number) => api.get(`/insights/project/${id}`),
+  portfolio: () => api.get('/insights/portfolio'),
+}
+
 export const resourcesApi = {
   list: () => api.get('/resources'),
   allocationMatrix: () => api.get('/resources/allocation-matrix'),

@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload } from 'lucide-react'
-import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi } from '../api'
+import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi, insightsApi } from '../api'
 import { getSocket } from '../realtime'
 import { useAuthStore } from '../store'
-import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus } from '../types'
+import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus, ProjectHealth } from '../types'
+import { ProjectInsightPanel } from '../components/HealthInsights'
 import EVMDashboard from '../components/EVMDashboard'
 import ScenarioPlanner from '../components/ScenarioPlanner'
 import CustomFieldsManager from '../components/CustomFieldsManager'
@@ -51,6 +52,7 @@ export default function ProjectDetail() {
   const [showFieldsManager, setShowFieldsManager] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showRiskImport, setShowRiskImport] = useState(false)
+  const [health, setHealth] = useState<ProjectHealth | null>(null)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -67,6 +69,7 @@ export default function ProjectDetail() {
     setMilestones(projRes.data.milestones)
     setMembers(projRes.data.members)
     setTaskStats(projRes.data.taskStats)
+    insightsApi.project(Number(id)).then(r => setHealth(r.data)).catch(() => setHealth(null))
   }, [id])
 
   useEffect(() => {
@@ -278,6 +281,7 @@ export default function ProjectDetail() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12 lg:col-span-8 space-y-5">
+            {health && <ProjectInsightPanel health={health} />}
             {project.description && (
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
