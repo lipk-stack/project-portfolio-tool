@@ -94,6 +94,7 @@ export const attachmentsApi = {
 
 export const insightsApi = {
   project: (id: number) => api.get(`/insights/project/${id}`),
+  trend: (id: number, days = 30) => api.get(`/insights/project/${id}/trend`, { params: { days } }),
   portfolio: () => api.get('/insights/portfolio'),
 }
 

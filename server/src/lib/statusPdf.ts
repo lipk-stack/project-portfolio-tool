@@ -1,5 +1,8 @@
 import PDFDocument from 'pdfkit'
 import { db } from '../database'
+import { scoreProjectById } from './healthService'
+
+const RAG_COLORS: Record<string, string> = { green: '#16A34A', amber: '#CA8A04', red: '#DC2626' }
 
 interface ProjectRow {
   id: number
@@ -141,6 +144,21 @@ export function buildStatusPdf(projectId: number): PDFKit.PDFDocument | null {
     48, y
   )
   y = doc.y + 16
+
+  // Health Insights — the same composite score + auto-narrative shown in-app,
+  // so the exported report carries the engine's verdict and recommendation.
+  const health = scoreProjectById(project.id)
+  if (health) {
+    const ragColor = RAG_COLORS[health.rag] || '#6B7280'
+    doc.fill('#374151').font('Helvetica-Bold').fontSize(11).text('Health Insights (Auto-Generated)', 48, y)
+    y = doc.y + 6
+    doc.roundedRect(48, y, 132, 20, 4).fill(ragColor)
+    doc.fill('#FFFFFF').font('Helvetica-Bold').fontSize(9)
+      .text(`${health.rag.toUpperCase()} · Health ${health.score}/100`, 48, y + 6, { width: 132, align: 'center' })
+    doc.fill('#374151').font('Helvetica').fontSize(9)
+      .text(health.summary, 192, y, { width: pageWidth - 144 })
+    y = Math.max(y + 28, doc.y + 12)
+  }
 
   const sectionTable = (
     title: string,

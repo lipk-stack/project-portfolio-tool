@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Filter, Grid3X3, List, ChevronRight, ArrowUpDown, Download, Bookmark, X } from 'lucide-react'
-import { projectsApi, exportApi, viewsApi } from '../api'
-import { Project } from '../types'
+import { projectsApi, exportApi, viewsApi, insightsApi } from '../api'
+import { Project, Rag } from '../types'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
+import { HealthChip } from '../components/HealthInsights'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
 import ProjectForm from '../components/forms/ProjectForm'
@@ -39,7 +40,16 @@ export default function Projects() {
   const [creating, setCreating] = useState(false)
   const [views, setViews] = useState<SavedView[]>([])
   const [activeViewId, setActiveViewId] = useState<number | null>(null)
+  const [scores, setScores] = useState<Record<number, { score: number; rag: Rag }>>({})
   const navigate = useNavigate()
+
+  useEffect(() => {
+    insightsApi.portfolio().then(r => {
+      const map: Record<number, { score: number; rag: Rag }> = {}
+      for (const p of r.data.projects) map[p.id] = { score: p.score, rag: p.rag }
+      setScores(map)
+    }).catch(() => { /* insights are non-critical chrome */ })
+  }, [])
 
   useEffect(() => {
     viewsApi.list('projects').then(r => {
@@ -212,6 +222,7 @@ export default function Projects() {
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider">Project</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider">Status</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider">Health</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider">Score</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider">Progress</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider hidden md:table-cell">Budget</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider hidden lg:table-cell">Due Date</th>
@@ -233,6 +244,7 @@ export default function Projects() {
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={project.status} /></td>
                   <td className="px-4 py-3"><HealthBadge health={project.health} /></td>
+                  <td className="px-4 py-3">{scores[project.id] ? <HealthChip score={scores[project.id].score} rag={scores[project.id].rag} /> : <span className="text-xs text-gray-300">—</span>}</td>
                   <td className="px-4 py-3 w-40">
                     <div className="flex items-center gap-2">
                       <Progress value={project.completion_percent} size="sm" color="auto" className="flex-1" />

@@ -26,6 +26,22 @@ export interface ProjectHealth {
   summary: string
 }
 
+export interface TrendPoint {
+  date: string
+  score: number
+  rag?: Rag
+}
+
+export interface HealthTrend {
+  points: TrendPoint[]
+  current: number | null
+  previous: number | null
+  delta: number | null
+  direction: 'up' | 'down' | 'flat'
+  min: number | null
+  max: number | null
+}
+
 export interface PortfolioInsights {
   overall: { score: number; rag: Rag; projectCount: number; counts: { green: number; amber: number; red: number } }
   needsAttention: Array<{ id: number; name: string; score: number; rag: Rag; color: string; headline: string }>

@@ -4,7 +4,7 @@ import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, Ale
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi, insightsApi } from '../api'
 import { getSocket } from '../realtime'
 import { useAuthStore } from '../store'
-import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus, ProjectHealth } from '../types'
+import { Project, Task, Risk, BudgetLine, Milestone, TaskStatus, ProjectHealth, HealthTrend } from '../types'
 import { ProjectInsightPanel } from '../components/HealthInsights'
 import EVMDashboard from '../components/EVMDashboard'
 import ScenarioPlanner from '../components/ScenarioPlanner'
@@ -53,6 +53,7 @@ export default function ProjectDetail() {
   const [showImport, setShowImport] = useState(false)
   const [showRiskImport, setShowRiskImport] = useState(false)
   const [health, setHealth] = useState<ProjectHealth | null>(null)
+  const [healthTrend, setHealthTrend] = useState<HealthTrend | null>(null)
 
   const loadProject = useCallback(async () => {
     if (!id) return
@@ -70,6 +71,7 @@ export default function ProjectDetail() {
     setMembers(projRes.data.members)
     setTaskStats(projRes.data.taskStats)
     insightsApi.project(Number(id)).then(r => setHealth(r.data)).catch(() => setHealth(null))
+    insightsApi.trend(Number(id)).then(r => setHealthTrend(r.data)).catch(() => setHealthTrend(null))
   }, [id])
 
   useEffect(() => {
@@ -281,7 +283,7 @@ export default function ProjectDetail() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12 lg:col-span-8 space-y-5">
-            {health && <ProjectInsightPanel health={health} />}
+            {health && <ProjectInsightPanel health={health} trend={healthTrend} />}
             {project.description && (
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h3 className="font-semibold text-gray-900 mb-2">Description</h3>

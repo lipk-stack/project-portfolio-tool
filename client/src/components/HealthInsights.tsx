@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, ArrowRight } from 'lucide-react'
+import { Sparkles, ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import Card from './ui/Card'
-import { Rag, HealthFactor, ProjectHealth, PortfolioInsights } from '../types'
+import { Rag, HealthFactor, ProjectHealth, PortfolioInsights, HealthTrend } from '../types'
 
 const RAG_TEXT: Record<Rag, string> = { green: 'text-green-600', amber: 'text-amber-600', red: 'text-red-600' }
 const RAG_BG: Record<Rag, string> = { green: 'bg-green-500', amber: 'bg-amber-500', red: 'bg-red-500' }
@@ -44,6 +44,48 @@ export function HealthChip({ score, rag }: { score: number; rag: Rag }) {
   )
 }
 
+// Pure-SVG sparkline of a project's health-score history (0-100 fixed scale, so
+// the line's vertical position is comparable across projects and over time).
+export function Sparkline({ points, color, width = 160, height = 36 }: { points: number[]; color: string; width?: number; height?: number }) {
+  if (points.length < 2) return <div className="text-xs text-gray-400">Not enough history yet</div>
+  const pad = 3
+  const n = points.length
+  const x = (i: number) => pad + (i / (n - 1)) * (width - 2 * pad)
+  const y = (v: number) => pad + (1 - Math.max(0, Math.min(100, v)) / 100) * (height - 2 * pad)
+  const line = points.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
+  const area = `${line} L${x(n - 1).toFixed(1)},${height - pad} L${x(0).toFixed(1)},${height - pad} Z`
+  return (
+    <svg width={width} height={height} className="overflow-visible">
+      <path d={area} fill={color} opacity={0.12} />
+      <path d={line} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(n - 1)} cy={y(points[n - 1])} r={2.5} fill={color} />
+    </svg>
+  )
+}
+
+// Compact trend strip: direction arrow, delta over the window, and a sparkline.
+export function HealthTrendStrip({ trend, rag }: { trend: HealthTrend; rag: Rag }) {
+  const color = RAG_RING[rag]
+  const dir = trend.direction
+  const Icon = dir === 'up' ? TrendingUp : dir === 'down' ? TrendingDown : Minus
+  const dirColor = dir === 'up' ? 'text-green-600' : dir === 'down' ? 'text-red-600' : 'text-gray-400'
+  const delta = trend.delta ?? 0
+  const sign = delta > 0 ? '+' : ''
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+      <div>
+        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Health trend</div>
+        <div className={`flex items-center gap-1 text-sm font-semibold ${dirColor}`}>
+          <Icon size={15} />
+          {trend.points.length > 1 ? `${sign}${delta} pts` : '—'}
+          <span className="text-xs font-normal text-gray-400">over {trend.points.length} day{trend.points.length === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+      <Sparkline points={trend.points.map((p) => p.score)} color={color} />
+    </div>
+  )
+}
+
 function FactorBar({ factor }: { factor: HealthFactor }) {
   const rag = ragOf(factor.rag)
   const na = factor.rag === 'na'
@@ -63,7 +105,7 @@ function FactorBar({ factor }: { factor: HealthFactor }) {
 }
 
 // Per-project insight panel (used on the project detail page).
-export function ProjectInsightPanel({ health }: { health: ProjectHealth }) {
+export function ProjectInsightPanel({ health, trend }: { health: ProjectHealth; trend?: HealthTrend | null }) {
   return (
     <Card>
       <div className="flex items-start gap-4">
@@ -77,6 +119,7 @@ export function ProjectInsightPanel({ health }: { health: ProjectHealth }) {
           <p className="text-sm text-gray-600 leading-relaxed">{health.summary}</p>
         </div>
       </div>
+      {trend && trend.points.length > 1 && <HealthTrendStrip trend={trend} rag={health.rag} />}
       <div className="mt-3 pt-3 border-t border-gray-100">
         {health.factors.map((f) => <FactorBar key={f.key} factor={f} />)}
       </div>

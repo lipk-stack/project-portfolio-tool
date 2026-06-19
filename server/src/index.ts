@@ -4,8 +4,9 @@ import cors from 'cors'
 import helmet from 'helmet'
 import path from 'path'
 import http from 'http'
-import { initializeDatabase } from './database'
+import { initializeDatabase, db } from './database'
 import { initRealtime } from './lib/realtime'
+import { recordDailySnapshots, backfillDemoHistory } from './lib/healthService'
 
 import authRoutes from './routes/auth'
 import dashboardRoutes from './routes/dashboard'
@@ -34,6 +35,19 @@ import attachmentsRoutes from './routes/attachments'
 import insightsRoutes from './routes/insights'
 
 initializeDatabase()
+
+// Health-score history bootstrap: seed a one-time synthetic trend on a fresh
+// database so the sparklines aren't blank, then record today's real snapshot.
+// recordDailySnapshots is idempotent per (project, date), so restarting the
+// server simply refreshes today's point as the underlying data changes.
+try {
+  const hist = db.prepare('SELECT COUNT(*) as c FROM health_history').get() as { c: number }
+  const proj = db.prepare("SELECT COUNT(*) as c FROM projects WHERE status NOT IN ('cancelled')").get() as { c: number }
+  if (hist.c === 0 && proj.c > 0) backfillDemoHistory()
+  recordDailySnapshots()
+} catch (err) {
+  console.error('Health snapshot bootstrap failed:', err)
+}
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '3001', 10)

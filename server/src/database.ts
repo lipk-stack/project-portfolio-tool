@@ -335,6 +335,19 @@ function runMigrations() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS health_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      score INTEGER NOT NULL,
+      rag TEXT NOT NULL,
+      cpi REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, date)
+    )
+  `)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_health_history_project ON health_history(project_id, date)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_webhooks_enabled ON webhooks(enabled)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at)')
