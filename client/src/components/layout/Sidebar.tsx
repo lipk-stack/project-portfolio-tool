@@ -33,7 +33,7 @@ export default function Sidebar() {
         </div>
         {!collapsed && (
           <div>
-            <div className="font-bold text-sm leading-tight">ProjectPulse</div>
+            <div className="font-bold text-sm leading-tight">Helmsman</div>
             <div className="text-xs text-gray-400">Portfolio Manager</div>
           </div>
         )}

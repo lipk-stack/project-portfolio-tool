@@ -1,19 +1,28 @@
 {
-  "name": "project-portfolio-tool",
-  "version": "1.0.0",
+  "name": "helmsman",
+  "version": "1.1.0",
   "private": true,
+  "description": "Helmsman — self-hosted enterprise project portfolio management",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "server",
     "client"
   ],
   "scripts": {
+    "setup": "npm install && npm install --workspace=server && npm install --workspace=client",
+    "install:all": "npm run setup",
     "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
     "build": "npm run build --workspace=server && npm run build --workspace=client",
-    "start": "npm run start --workspace=server",
-    "install:all": "npm install && npm install --workspace=server && npm install --workspace=client",
+    "assemble": "node scripts/assemble.mjs",
+    "prestart": "node scripts/assemble.mjs",
+    "start": "cross-env NODE_ENV=production node server/dist/index.js",
+    "serve": "npm run build && npm run start",
     "test": "npm run test --workspace=server"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
   }
 }

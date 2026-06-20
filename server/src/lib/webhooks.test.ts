@@ -103,11 +103,11 @@ describe('buildSlackText', () => {
   it('never throws on missing or malformed data', () => {
     expect(buildSlackText('task.created', {})).toContain('Task created')
     expect(buildSlackText('task.updated', { task: null })).toContain('Task updated')
-    expect(buildSlackText('unknown.event', {})).toBe('ProjectPulse event: unknown.event')
+    expect(buildSlackText('unknown.event', {})).toBe('Helmsman event: unknown.event')
   })
 
   it('wraps text for slack body and accepts new event types in the registry', () => {
-    expect(buildSlackBody('ping', {})).toEqual({ text: ':wave: ProjectPulse webhook test — your integration works!' })
+    expect(buildSlackBody('ping', {})).toEqual({ text: ':wave: Helmsman webhook test — your integration works!' })
     expect(isValidEventList(['project.created'])).toBe(true)
   })
 })

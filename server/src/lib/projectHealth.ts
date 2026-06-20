@@ -1,5 +1,5 @@
 // Project Health Scoring & Auto-Insights — a dependency-free, rule-based engine
-// that condenses the many signals ProjectPulse already tracks (earned schedule,
+// that condenses the many signals Helmsman already tracks (earned schedule,
 // cost performance, risk exposure, task execution) into a single 0-100 health
 // score, a RAG (red/amber/green) status, the weighted factors that drove it, and
 // a plain-English narrative — the "auto status summary" feature that Planview,

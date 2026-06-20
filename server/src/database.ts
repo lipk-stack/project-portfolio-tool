@@ -3,7 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import bcrypt from 'bcryptjs'
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/portfolio.db')
+const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/helmsman.db')
 const dbDir = path.dirname(dbPath)
 
 if (!fs.existsSync(dbDir)) {

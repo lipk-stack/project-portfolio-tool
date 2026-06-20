@@ -1,4 +1,4 @@
-# ProjectPulse — Enterprise Portfolio Management
+# Helmsman — Enterprise Portfolio Management
 
 A full-featured, production-ready project portfolio management tool with Gantt charts, Kanban boards, EVM analytics, baseline tracking, resource management, budget tracking, risk registers, calendar, and real-time collaboration.
 
@@ -37,28 +37,52 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 
 ## Quick Start
 
-### Option 1: Docker (recommended for production)
+Helmsman runs the same way on **Windows, macOS and Linux**. Two requirements:
+
+- **[Node.js 20 or newer](https://nodejs.org)** (LTS recommended) — for the one-command and npm paths, or
+- **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** — for the container path.
+
+The data store is an embedded SQLite file, so there is **no database to install or configure**.
+
+### Option 1: One command (easiest — Win / Mac / Linux)
+
+Clone the repo, then from the project folder:
+
+| OS | Command |
+|---|---|
+| **macOS / Linux** | `./start.sh` |
+| **Windows** | double-click `start.bat` (or run `start.bat` in a terminal) |
+
+The launcher creates a `.env` from the template, installs dependencies, builds the app, and starts it at **http://localhost:3001**. First run takes a couple of minutes; subsequent runs are fast.
+
+### Option 2: npm scripts (cross-platform)
 
 ```bash
-cp .env.example .env
+npm run setup     # install root + server + client dependencies
+npm run serve     # build everything and start at http://localhost:3001
+```
+
+These scripts are OS-agnostic (no shell-specific commands), so the exact same lines work in PowerShell, cmd, bash, or zsh.
+
+### Option 3: Docker (recommended for a server / always-on deployment)
+
+```bash
+cp .env.example .env          # (Windows: copy .env.example .env)
 # Edit .env and set a strong JWT_SECRET
-docker-compose up -d
+docker compose up -d
 # App available at http://localhost:3001
 ```
 
-### Option 2: Development mode
+### Option 4: Development mode (hot reload)
 
 ```bash
-# Install dependencies
-npm install
-npm install --workspace=server
-npm install --workspace=client
-
-# Start both server and client
+npm run setup
 npm run dev
-# Server: http://localhost:3001
-# Client: http://localhost:5173
+# Server (API):  http://localhost:3001
+# Client (Vite): http://localhost:5173
 ```
+
+> **Note on the native module:** Helmsman uses `better-sqlite3`, which ships precompiled binaries for Windows, macOS and Linux on Node 20/22 — so `npm run setup` works without any compiler toolchain on a standard install.
 
 ## Demo Accounts
 
@@ -77,7 +101,9 @@ npm run dev
 ## Architecture
 
 ```
-project-portfolio-tool/
+helmsman/
+├── start.sh / start.bat  # one-command launchers (macOS·Linux / Windows)
+├── scripts/assemble.mjs  # cross-platform build assembler (client → server/public)
 ├── client/               # React + Vite frontend
 │   └── src/
 │       ├── components/   # Gantt, Kanban, EVMDashboard, GlobalSearch, NotificationsDropdown, CommentsPanel, forms, UI library
@@ -135,7 +161,7 @@ npm test   # Vitest unit tests (agile math, automations, scenarios, webhooks)
 
 ## Comparison with Industry Leaders
 
-| Feature | ProjectPulse | MS Project | Jira | Asana |
+| Feature | Helmsman | MS Project | Jira | Asana |
 |---|---|---|---|---|
 | Gantt Chart | ✅ Custom SVG | ✅ | ❌ Native | ⚠️ Basic |
 | Critical Path | ✅ | ✅ | ❌ | ❌ |

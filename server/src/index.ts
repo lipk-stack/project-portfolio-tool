@@ -117,6 +117,6 @@ const httpServer = http.createServer(app)
 initRealtime(httpServer)
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 ProjectPulse server running on http://localhost:${PORT}`)
+  console.log(`🚀 Helmsman server running on http://localhost:${PORT}`)
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`)
 })

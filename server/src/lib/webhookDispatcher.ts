@@ -24,7 +24,7 @@ export async function deliver(hook: WebhookRow, eventType: string, rawBody: stri
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'User-Agent': 'ProjectPulse-Webhook/1.0',
+      'User-Agent': 'Helmsman-Webhook/1.0',
       'X-PPT-Event': eventType,
     }
     if (hook.secret) headers['X-PPT-Signature'] = signPayload(hook.secret, rawBody)
