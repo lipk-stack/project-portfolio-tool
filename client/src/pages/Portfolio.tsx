@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { portfoliosApi, projectsApi, budgetApi, reportsApi, exportApi } from '../api'
-import { Portfolio as PortfolioType, Project } from '../types'
+import { portfoliosApi, projectsApi, budgetApi, reportsApi, exportApi, insightsApi } from '../api'
+import { Portfolio as PortfolioType, Project, Rag } from '../types'
 import { HealthBadge, PriorityBadge, HealthDot } from '../components/ui/Badge'
+import { HealthChip } from '../components/HealthInsights'
 import Progress from '../components/ui/Progress'
 import Card from '../components/ui/Card'
 import { format, parseISO } from 'date-fns'
@@ -25,6 +26,7 @@ export default function Portfolio() {
   const [budgetData, setBudgetData] = useState<{ overview: Array<{ id: number; name: string; budget: number; spent: number; health: string; color: string; completion_percent: number }> } | null>(null)
   const [loading, setLoading] = useState(true)
   const [briefingOpen, setBriefingOpen] = useState(false)
+  const [healthScores, setHealthScores] = useState<Record<number, { score: number; rag: Rag }>>({})
   const navigate = useNavigate()
 
   const downloadBriefing = async (id: number | 'all', name: string) => {
@@ -42,6 +44,12 @@ export default function Portfolio() {
       setProjects(projRes.data.projects)
       setBudgetData(budRes.data)
     }).finally(() => setLoading(false))
+
+    insightsApi.portfolio().then(r => {
+      const map: Record<number, { score: number; rag: Rag }> = {}
+      for (const p of r.data.projects) map[p.id] = { score: p.score, rag: p.rag }
+      setHealthScores(map)
+    }).catch(() => {})
   }, [])
 
   if (loading) return (
@@ -197,7 +205,7 @@ export default function Portfolio() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b">
-                    {['Project', 'Health', 'Priority', 'Progress', 'Budget', 'Timeline', 'Risks'].map(h => (
+                    {['Project', 'Health', 'Score', 'Priority', 'Progress', 'Budget', 'Timeline', 'Risks'].map(h => (
                       <th key={h} className={`text-left text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider ${['Budget', 'Timeline', 'Risks'].includes(h) ? 'hidden md:table-cell' : ''}`}>{h}</th>
                     ))}
                   </tr>
@@ -215,6 +223,9 @@ export default function Portfolio() {
                         </div>
                       </td>
                       <td className="px-4 py-3"><HealthBadge health={p.health} /></td>
+                      <td className="px-4 py-3">
+                        {healthScores[p.id] ? <HealthChip score={healthScores[p.id].score} rag={healthScores[p.id].rag} /> : <span className="text-xs text-gray-300">—</span>}
+                      </td>
                       <td className="px-4 py-3"><PriorityBadge priority={p.priority} /></td>
                       <td className="px-4 py-3 w-48">
                         <div className="flex items-center gap-2">

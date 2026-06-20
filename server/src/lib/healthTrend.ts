@@ -44,3 +44,48 @@ export function summarizeTrend(points: TrendPoint[], flatThreshold = 1): TrendSu
     max: Math.max(...scores),
   }
 }
+
+// Single source of truth for mapping a 0-100 health score to a RAG band. Shared
+// by the scoring service and the portfolio-trend aggregator so the thresholds
+// never drift apart.
+export function ragForScore(score: number): 'green' | 'amber' | 'red' {
+  return score >= 80 ? 'green' : score >= 55 ? 'amber' : 'red'
+}
+
+// Rolls up per-project daily snapshots into a single portfolio-level series:
+// one point per date carrying the mean score across all projects that have a
+// snapshot on that date (rounded), tagged with the RAG band for that average.
+// Input may be in any order and may have several rows per date.
+export function aggregatePortfolioTrend(rows: TrendPoint[]): TrendPoint[] {
+  const byDate = new Map<string, { sum: number; n: number }>()
+  for (const r of rows) {
+    const acc = byDate.get(r.date) || { sum: 0, n: 0 }
+    acc.sum += r.score
+    acc.n += 1
+    byDate.set(r.date, acc)
+  }
+  return [...byDate.entries()]
+    .map(([date, { sum, n }]) => {
+      const score = Math.round(sum / n)
+      return { date, score, rag: ragForScore(score) }
+    })
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+}
+
+export interface RagSnapshot {
+  id: number
+  name: string
+  rag: string
+}
+
+// Given yesterday's and today's per-project RAG snapshots, returns the projects
+// that newly slipped INTO red (were green or amber yesterday, red today).
+// Projects with no prior snapshot are intentionally skipped: a freshly added
+// red project hasn't "transitioned" and shouldn't trigger a regression alert.
+export function detectRedTransitions(prev: RagSnapshot[], curr: RagSnapshot[]): RagSnapshot[] {
+  const prevRag = new Map(prev.map((p) => [p.id, p.rag]))
+  return curr.filter((c) => {
+    const before = prevRag.get(c.id)
+    return c.rag === 'red' && before !== undefined && before !== 'red'
+  })
+}

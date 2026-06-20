@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { summarizeTrend, TrendPoint } from './healthTrend'
+import { summarizeTrend, aggregatePortfolioTrend, detectRedTransitions, ragForScore, TrendPoint } from './healthTrend'
 
 describe('summarizeTrend', () => {
   it('returns an empty/flat summary for no data', () => {
@@ -69,5 +69,75 @@ describe('summarizeTrend', () => {
     expect(r.previous).toBe(40)
     expect(r.current).toBe(90)
     expect(r.direction).toBe('up')
+  })
+})
+
+describe('ragForScore', () => {
+  it('maps scores to RAG bands at the 80/55 thresholds', () => {
+    expect(ragForScore(80)).toBe('green')
+    expect(ragForScore(79)).toBe('amber')
+    expect(ragForScore(55)).toBe('amber')
+    expect(ragForScore(54)).toBe('red')
+    expect(ragForScore(0)).toBe('red')
+    expect(ragForScore(100)).toBe('green')
+  })
+})
+
+describe('aggregatePortfolioTrend', () => {
+  it('averages scores per date, rounds, tags RAG, and sorts chronologically', () => {
+    const rows: TrendPoint[] = [
+      { date: '2026-06-02', score: 90 },
+      { date: '2026-06-01', score: 40 },
+      { date: '2026-06-01', score: 60 }, // avg 50 -> red
+      { date: '2026-06-02', score: 70 }, // avg 80 -> green
+    ]
+    const out = aggregatePortfolioTrend(rows)
+    expect(out).toEqual([
+      { date: '2026-06-01', score: 50, rag: 'red' },
+      { date: '2026-06-02', score: 80, rag: 'green' },
+    ])
+  })
+
+  it('rounds the mean to the nearest integer', () => {
+    const out = aggregatePortfolioTrend([
+      { date: '2026-06-01', score: 70 },
+      { date: '2026-06-01', score: 71 },
+      { date: '2026-06-01', score: 72 }, // mean 71
+    ])
+    expect(out[0].score).toBe(71)
+  })
+
+  it('returns an empty series for no rows', () => {
+    expect(aggregatePortfolioTrend([])).toEqual([])
+  })
+})
+
+describe('detectRedTransitions', () => {
+  const prev = [
+    { id: 1, name: 'Alpha', rag: 'amber' },
+    { id: 2, name: 'Beta', rag: 'green' },
+    { id: 3, name: 'Gamma', rag: 'red' },
+  ]
+
+  it('flags projects that crossed from green/amber into red', () => {
+    const curr = [
+      { id: 1, name: 'Alpha', rag: 'red' }, // amber -> red: alert
+      { id: 2, name: 'Beta', rag: 'green' }, // unchanged
+      { id: 3, name: 'Gamma', rag: 'red' }, // was already red: no alert
+    ]
+    expect(detectRedTransitions(prev, curr).map((p) => p.id)).toEqual([1])
+  })
+
+  it('does not alert for projects with no prior snapshot', () => {
+    const curr = [{ id: 9, name: 'NewRed', rag: 'red' }]
+    expect(detectRedTransitions(prev, curr)).toEqual([])
+  })
+
+  it('returns nothing when no project newly turned red', () => {
+    const curr = [
+      { id: 1, name: 'Alpha', rag: 'amber' },
+      { id: 2, name: 'Beta', rag: 'green' },
+    ]
+    expect(detectRedTransitions(prev, curr)).toEqual([])
   })
 })

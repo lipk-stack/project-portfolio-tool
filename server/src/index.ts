@@ -6,7 +6,7 @@ import path from 'path'
 import http from 'http'
 import { initializeDatabase, db } from './database'
 import { initRealtime } from './lib/realtime'
-import { recordDailySnapshots, backfillDemoHistory } from './lib/healthService'
+import { recordDailySnapshots, backfillDemoHistory, notifyRedTransitions } from './lib/healthService'
 
 import authRoutes from './routes/auth'
 import dashboardRoutes from './routes/dashboard'
@@ -43,8 +43,15 @@ initializeDatabase()
 try {
   const hist = db.prepare('SELECT COUNT(*) as c FROM health_history').get() as { c: number }
   const proj = db.prepare("SELECT COUNT(*) as c FROM projects WHERE status NOT IN ('cancelled')").get() as { c: number }
-  if (hist.c === 0 && proj.c > 0) backfillDemoHistory()
+  const freshHistory = hist.c === 0 && proj.c > 0
+  if (freshHistory) backfillDemoHistory()
   recordDailySnapshots()
+  // Only raise red-transition alerts on real day-over-day data — never on the
+  // very first bootstrap (the synthetic backfill would spam manufactured drops).
+  if (!freshHistory) {
+    const alerted = notifyRedTransitions()
+    if (alerted.length) console.log(`⚠️  Health alerts raised for: ${alerted.join(', ')}`)
+  }
 } catch (err) {
   console.error('Health snapshot bootstrap failed:', err)
 }

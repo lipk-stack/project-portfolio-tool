@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { authenticate } from '../middleware/auth'
-import { scoreProjectById, scoreAllProjects, getProjectTrend } from '../lib/healthService'
+import { scoreProjectById, scoreAllProjects, getProjectTrend, getPortfolioTrend } from '../lib/healthService'
 import { summarizeTrend } from '../lib/healthTrend'
+
+function clampDays(raw: unknown): number {
+  return Math.max(7, Math.min(180, parseInt(String(raw || '30'), 10) || 30))
+}
 
 const router = Router()
 
@@ -16,8 +20,12 @@ router.get('/project/:id', authenticate, (req: Request, res: Response) => {
 router.get('/project/:id/trend', authenticate, (req: Request, res: Response) => {
   const exists = scoreProjectById(req.params.id)
   if (!exists) return res.status(404).json({ error: 'Project not found' })
-  const days = Math.max(7, Math.min(180, parseInt(String(req.query.days || '30'), 10) || 30))
-  res.json(summarizeTrend(getProjectTrend(req.params.id, days)))
+  res.json(summarizeTrend(getProjectTrend(req.params.id, clampDays(req.query.days))))
+})
+
+// Portfolio-level health-score trend (mean score across all projects per day).
+router.get('/portfolio/trend', authenticate, (req: Request, res: Response) => {
+  res.json(summarizeTrend(getPortfolioTrend(clampDays(req.query.days))))
 })
 
 // Portfolio rollup: every active project scored, plus aggregate counts and the

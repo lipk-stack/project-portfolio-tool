@@ -8,7 +8,8 @@
 import { db } from '../database'
 import { computeEarnedSchedule } from './earnedSchedule'
 import { computeProjectHealth, ProjectHealthResult } from './projectHealth'
-import { TrendPoint } from './healthTrend'
+import { TrendPoint, ragForScore, aggregatePortfolioTrend, detectRedTransitions, RagSnapshot } from './healthTrend'
+import { createNotification } from './notify'
 
 export interface ProjectRow {
   id: number
@@ -94,10 +95,6 @@ export function scoreAllProjects(): ScoredProject[] {
   return rows.map(scoreProjectRow)
 }
 
-function ragForScore(score: number): 'green' | 'amber' | 'red' {
-  return score >= 80 ? 'green' : score >= 55 ? 'amber' : 'red'
-}
-
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
 }
@@ -128,6 +125,57 @@ export function getProjectTrend(projectId: number | string, days = 30): TrendPoi
     ORDER BY date ASC
   `).all(projectId, isoDaysAgo(days)) as Array<{ date: string; score: number; rag: string }>
   return rows
+}
+
+// Portfolio-level score history: the mean score across all projects per date,
+// over the trailing window (oldest -> newest). Aggregation lives in the pure
+// healthTrend layer so it stays unit-tested.
+export function getPortfolioTrend(days = 30): TrendPoint[] {
+  const rows = db.prepare(`
+    SELECT date, score FROM health_history WHERE date >= ?
+  `).all(isoDaysAgo(days)) as Array<{ date: string; score: number }>
+  return aggregatePortfolioTrend(rows)
+}
+
+// Reads the stored RAG band for every project on a given date.
+function ragSnapshotForDate(dateStr: string): RagSnapshot[] {
+  return db.prepare(`
+    SELECT h.project_id AS id, p.name AS name, h.rag AS rag
+    FROM health_history h JOIN projects p ON p.id = h.project_id
+    WHERE h.date = ?
+  `).all(dateStr) as RagSnapshot[]
+}
+
+// Notifies project managers (and admins) when a project's daily health snapshot
+// crosses from green/amber into red since yesterday. Idempotent per project per
+// day: a re-run won't duplicate an alert already raised today. Returns the names
+// of the projects that triggered an alert. Relies on health_history already
+// holding both today's and yesterday's snapshots (recordDailySnapshots is the
+// writer; this should be called after it).
+export function notifyRedTransitions(today = isoDaysAgo(0), yesterday = isoDaysAgo(1)): string[] {
+  const dropped = detectRedTransitions(ragSnapshotForDate(yesterday), ragSnapshotForDate(today))
+  if (dropped.length === 0) return []
+
+  const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all() as Array<{ id: number }>
+  const alreadyAlerted = db.prepare(
+    "SELECT 1 FROM notifications WHERE type = 'health_red' AND link = ? AND date(created_at) = ?"
+  )
+  const notified: string[] = []
+
+  for (const proj of dropped) {
+    const link = `/projects/${proj.id}`
+    if (alreadyAlerted.get(link, today)) continue // de-dupe within the day
+
+    const manager = db.prepare('SELECT manager_id FROM projects WHERE id = ?').get(proj.id) as { manager_id: number | null } | undefined
+    const recipients = new Set<number>(admins.map((a) => a.id))
+    if (manager?.manager_id) recipients.add(manager.manager_id)
+
+    const title = `Health alert: ${proj.name} turned RED`
+    const message = `${proj.name} dropped into the red health band today. Review schedule, budget and open risks.`
+    for (const userId of recipients) createNotification(userId, 'health_red', title, message, link)
+    notified.push(proj.name)
+  }
+  return notified
 }
 
 // Pseudo-random but deterministic value in [0,1) from an integer-ish seed, so

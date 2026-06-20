@@ -128,7 +128,7 @@ export function ProjectInsightPanel({ health, trend }: { health: ProjectHealth; 
 }
 
 // Portfolio-level auto-insights card (used on the dashboard).
-export function PortfolioInsightsCard({ data }: { data: PortfolioInsights }) {
+export function PortfolioInsightsCard({ data, trend }: { data: PortfolioInsights; trend?: HealthTrend | null }) {
   const navigate = useNavigate()
   const { overall, needsAttention } = data
   return (
@@ -150,6 +150,22 @@ export function PortfolioInsightsCard({ data }: { data: PortfolioInsights }) {
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{overall.counts.amber}</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />{overall.counts.red}</span>
             </div>
+            {trend && trend.points.length > 1 && (
+              <div className="mt-3 flex items-center gap-2">
+                {(() => {
+                  const dir = trend.direction
+                  const Icon = dir === 'up' ? TrendingUp : dir === 'down' ? TrendingDown : Minus
+                  const dirColor = dir === 'up' ? 'text-green-600' : dir === 'down' ? 'text-red-600' : 'text-gray-400'
+                  const delta = trend.delta ?? 0
+                  return (
+                    <span className={`flex items-center gap-1 text-xs font-semibold ${dirColor}`} title={`${trend.points.length}-day portfolio health trend`}>
+                      <Icon size={14} />{delta > 0 ? '+' : ''}{delta}
+                    </span>
+                  )
+                })()}
+                <Sparkline points={trend.points.map((p) => p.score)} color={RAG_RING[overall.rag]} width={120} height={28} />
+              </div>
+            )}
           </div>
         </div>
         <div className="col-span-12 md:col-span-8 px-5 py-4">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TrendingUp, TrendingDown, Minus, FolderOpen, CheckCircle, AlertTriangle, XCircle, DollarSign, Users, Shield, Calendar, Activity, Clock, ArrowRight, LucideIcon } from 'lucide-react'
 import { dashboardApi, evmApi, insightsApi } from '../api'
-import { DashboardSummary, Milestone, ActivityItem, PortfolioInsights } from '../types'
+import { DashboardSummary, Milestone, ActivityItem, PortfolioInsights, HealthTrend } from '../types'
 import Card from '../components/ui/Card'
 import { PortfolioInsightsCard } from '../components/HealthInsights'
 import { HealthDot } from '../components/ui/Badge'
@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardSummary | null>(null)
   const [evm, setEvm] = useState<PortfolioEVM | null>(null)
   const [insights, setInsights] = useState<PortfolioInsights | null>(null)
+  const [insightsTrend, setInsightsTrend] = useState<HealthTrend | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -75,6 +76,7 @@ export default function Dashboard() {
     dashboardApi.summary().then(r => setData(r.data)).finally(() => setLoading(false))
     evmApi.portfolioSummary().then(r => setEvm(r.data)).catch(() => {})
     insightsApi.portfolio().then(r => setInsights(r.data)).catch(() => {})
+    insightsApi.portfolioTrend().then(r => setInsightsTrend(r.data)).catch(() => {})
   }, [])
 
   if (loading) return (
@@ -162,7 +164,7 @@ export default function Dashboard() {
       )}
 
       {/* Auto-insights */}
-      {insights && <PortfolioInsightsCard data={insights} />}
+      {insights && <PortfolioInsightsCard data={insights} trend={insightsTrend} />}
 
       {/* Main grid */}
       <div className="grid grid-cols-12 gap-6">

@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit'
 import { db } from '../database'
+import { scoreProjectById } from './healthService'
 
 interface ProjectRow {
   id: number
@@ -110,6 +111,33 @@ export function buildPortfolioPdf(portfolioId: number | null): PDFKit.PDFDocumen
     doc.fill(kpi.alert ? '#DC2626' : '#111827').font('Helvetica-Bold').fontSize(13).text(kpi.value, x + 6, y + 22, { width: boxW - 12 })
   })
   y += 68
+
+  // Auto-generated portfolio health band (computed health score across the
+  // in-scope projects, reusing the same scoring engine as the app/insights API).
+  const scored = projects.map((p) => scoreProjectById(p.id)).filter((s): s is NonNullable<typeof s> => s != null)
+  if (scored.length) {
+    const RAG_BAND: Record<string, { color: string; word: string }> = {
+      green: { color: '#16A34A', word: 'GREEN' },
+      amber: { color: '#CA8A04', word: 'AMBER' },
+      red: { color: '#DC2626', word: 'RED' },
+    }
+    const avg = Math.round(scored.reduce((s, x) => s + x.score, 0) / scored.length)
+    const rag = avg >= 80 ? 'green' : avg >= 55 ? 'amber' : 'red'
+    const counts = { green: 0, amber: 0, red: 0 }
+    for (const s of scored) counts[s.rag]++
+    const band = RAG_BAND[rag]
+    const worst = [...scored].sort((a, b) => a.score - b.score)[0]
+
+    doc.roundedRect(48, y, pageWidth, 50, 4).fill('#F9FAFB')
+    doc.rect(48, y, 4, 50).fill(band.color)
+    doc.fill('#374151').font('Helvetica-Bold').fontSize(10).text('Portfolio Health (Auto-Generated)', 60, y + 8)
+    doc.fill(band.color).font('Helvetica-Bold').fontSize(12).text(`${band.word} · ${avg}/100`, doc.page.width - 220, y + 8, { width: 172, align: 'right' })
+    doc.fill('#6B7280').font('Helvetica').fontSize(9).text(
+      `${counts.green} green · ${counts.amber} amber · ${counts.red} red across ${scored.length} project${scored.length === 1 ? '' : 's'}. Lowest: ${worst.name} (${worst.score}) — ${worst.headline}`,
+      60, y + 26, { width: pageWidth - 24, height: 18, ellipsis: true }
+    )
+    y += 64
+  }
 
   const ensureSpace = (needed: number) => {
     if (y + needed > doc.page.height - 70) {
