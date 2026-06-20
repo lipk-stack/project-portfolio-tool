@@ -11,9 +11,9 @@ services:
       NODE_ENV: production
       PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
-      DB_PATH: /data/helmsman.db
+      DB_PATH: /data/portia.db
     volumes:
-      - helmsman_data:/data
+      - portia_data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
@@ -22,4 +22,4 @@ services:
       retries: 3
 
 volumes:
-  helmsman_data:
+  portia_data:

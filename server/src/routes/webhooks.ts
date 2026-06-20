@@ -74,7 +74,7 @@ router.post('/:id/test', authenticate, requireAdmin, async (req: Request, res: R
   const hook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(req.params.id) as WebhookRow | undefined
   if (!hook) return res.status(404).json({ error: 'Webhook not found' })
 
-  const data = { message: 'Helmsman webhook test', webhook_id: hook.id }
+  const data = { message: 'Portia webhook test', webhook_id: hook.id }
   const body = JSON.stringify(hook.format === 'slack' ? buildSlackBody('ping', data) : buildEventBody('ping', 0, data))
   const status = await deliver(hook, 'ping', body)
   res.json({ delivered: status >= 200 && status < 300, status })

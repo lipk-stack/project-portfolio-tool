@@ -187,7 +187,7 @@ export default function Settings() {
           <h2 className="font-semibold text-gray-900">API Tokens</h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
-          Personal access tokens let external tools call the Helmsman API on your behalf.
+          Personal access tokens let external tools call the Portia API on your behalf.
           Send them as <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">Authorization: Bearer ppt_...</code>
         </p>
 

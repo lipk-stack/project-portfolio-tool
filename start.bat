@@ -1,5 +1,5 @@
 @echo off
-REM Helmsman - one-command launcher for Windows.
+REM Portia - one-command launcher for Windows.
 REM Installs dependencies, builds the app, and starts it at http://localhost:3001
 setlocal
 cd /d "%~dp0"
@@ -18,5 +18,5 @@ if not exist ".env" (
 echo Installing dependencies...
 call npm run setup
 if errorlevel 1 exit /b 1
-echo Building and starting Helmsman...
+echo Building and starting Portia...
 call npm run serve

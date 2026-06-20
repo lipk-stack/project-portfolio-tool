@@ -117,6 +117,6 @@ const httpServer = http.createServer(app)
 initRealtime(httpServer)
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Helmsman server running on http://localhost:${PORT}`)
+  console.log(`🚀 Portia server running on http://localhost:${PORT}`)
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`)
 })

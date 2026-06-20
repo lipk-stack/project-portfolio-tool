@@ -40,18 +40,18 @@ export function sendNotificationEmail(userId: number, title: string, message: st
   const url = link ? `${appUrl}${link}` : appUrl
 
   t.sendMail({
-    from: process.env.SMTP_FROM || 'Helmsman <noreply@helmsman.local>',
+    from: process.env.SMTP_FROM || 'Portia <noreply@portia.local>',
     to: user.email,
-    subject: `[Helmsman] ${title}`,
-    text: `Hi ${user.name},\n\n${title}\n${message ? `\n${message}\n` : ''}\nView it here: ${url}\n\n— Helmsman`,
+    subject: `[Portia] ${title}`,
+    text: `Hi ${user.name},\n\n${title}\n${message ? `\n${message}\n` : ''}\nView it here: ${url}\n\n— Portia`,
     html: `
       <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
-        <div style="background:#2563eb;color:#fff;padding:14px 20px;border-radius:8px 8px 0 0;font-weight:bold">Helmsman</div>
+        <div style="background:#2563eb;color:#fff;padding:14px 20px;border-radius:8px 8px 0 0;font-weight:bold">Portia</div>
         <div style="border:1px solid #e5e7eb;border-top:none;padding:20px;border-radius:0 0 8px 8px">
           <p style="margin:0 0 8px">Hi ${user.name},</p>
           <p style="margin:0 0 8px;font-weight:bold">${title}</p>
           ${message ? `<p style="margin:0 0 16px;color:#4b5563">${message}</p>` : ''}
-          <a href="${url}" style="display:inline-block;background:#2563eb;color:#fff;padding:8px 16px;border-radius:6px;text-decoration:none">Open in Helmsman</a>
+          <a href="${url}" style="display:inline-block;background:#2563eb;color:#fff;padding:8px 16px;border-radius:6px;text-decoration:none">Open in Portia</a>
         </div>
       </div>`,
   }).catch(err => console.error('Email send failed:', err.message))

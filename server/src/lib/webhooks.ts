@@ -85,9 +85,9 @@ export function buildSlackText(eventType: string, data: Record<string, unknown>)
     case 'project.updated':
       return `:clipboard: Project updated: *${get(project, 'name')}* — ${get(project, 'status')}, health ${get(project, 'health')}`
     case 'ping':
-      return ':wave: Helmsman webhook test — your integration works!'
+      return ':wave: Portia webhook test — your integration works!'
     default:
-      return `Helmsman event: ${eventType}`
+      return `Portia event: ${eventType}`
   }
 }
 

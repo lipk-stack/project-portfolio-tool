@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Helmsman — one-command launcher for macOS / Linux.
+# Portia — one-command launcher for macOS / Linux.
 # Installs dependencies, builds the app, and starts it at http://localhost:3001
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -22,5 +22,5 @@ fi
 
 echo "Installing dependencies…"
 npm run setup
-echo "Building and starting Helmsman…"
+echo "Building and starting Portia…"
 npm run serve

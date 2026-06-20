@@ -1,4 +1,4 @@
-# Helmsman — Enterprise Portfolio Management
+# Portia — Enterprise Portfolio Management
 
 A full-featured, production-ready project portfolio management tool with Gantt charts, Kanban boards, EVM analytics, baseline tracking, resource management, budget tracking, risk registers, calendar, and real-time collaboration.
 
@@ -37,7 +37,7 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 
 ## Quick Start
 
-Helmsman runs the same way on **Windows, macOS and Linux**. Two requirements:
+Portia runs the same way on **Windows, macOS and Linux**. Two requirements:
 
 - **[Node.js 20 or newer](https://nodejs.org)** (LTS recommended) — for the one-command and npm paths, or
 - **[Docker Desktop](https://www.docker.com/products/docker-desktop/)** — for the container path.
@@ -82,7 +82,7 @@ npm run dev
 # Client (Vite): http://localhost:5173
 ```
 
-> **Note on the native module:** Helmsman uses `better-sqlite3`, which ships precompiled binaries for Windows, macOS and Linux on Node 20/22 — so `npm run setup` works without any compiler toolchain on a standard install.
+> **Note on the native module:** Portia uses `better-sqlite3`, which ships precompiled binaries for Windows, macOS and Linux on Node 20/22 — so `npm run setup` works without any compiler toolchain on a standard install.
 
 ## Demo Accounts
 
@@ -101,7 +101,7 @@ npm run dev
 ## Architecture
 
 ```
-helmsman/
+portia/
 ├── start.sh / start.bat  # one-command launchers (macOS·Linux / Windows)
 ├── scripts/assemble.mjs  # cross-platform build assembler (client → server/public)
 ├── client/               # React + Vite frontend
@@ -161,7 +161,7 @@ npm test   # Vitest unit tests (agile math, automations, scenarios, webhooks)
 
 ## Comparison with Industry Leaders
 
-| Feature | Helmsman | MS Project | Jira | Asana |
+| Feature | Portia | MS Project | Jira | Asana |
 |---|---|---|---|---|
 | Gantt Chart | ✅ Custom SVG | ✅ | ❌ Native | ⚠️ Basic |
 | Critical Path | ✅ | ✅ | ❌ | ❌ |

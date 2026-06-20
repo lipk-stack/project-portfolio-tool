@@ -49,7 +49,7 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-500 rounded-2xl mb-4 shadow-lg shadow-blue-500/30">
             <Zap size={28} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">Helmsman</h1>
+          <h1 className="text-3xl font-bold text-white mb-1">Portia</h1>
           <p className="text-blue-200/70">Enterprise Portfolio Management</p>
         </div>
 
@@ -119,7 +119,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-blue-200/40 text-xs mt-6">
-          Helmsman v1.0 · Enterprise Portfolio Management
+          Portia v1.0 · Enterprise Portfolio Management
         </p>
       </div>
     </div>
