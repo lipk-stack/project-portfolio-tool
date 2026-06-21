@@ -7,9 +7,58 @@ import { createNotification } from '../lib/notify'
 import { emitToProject } from '../lib/realtime'
 import { dispatchWebhooks } from '../lib/webhookDispatcher'
 import { computeNextOccurrence, isValidRecurrence } from '../lib/recurrence'
-import { buildTaskImport, ImportUser, TASK_IMPORT_TEMPLATE } from '../lib/csvImport'
+import { buildTaskImport, ImportUser, TASK_IMPORT_TEMPLATE, TaskImportResult } from '../lib/csvImport'
+import { parseGithubRepo, githubIssuesToCsv, countImportableIssues, GithubIssue } from '../lib/githubImport'
 
 const router = Router()
+
+// Shared dry-run/commit pipeline behind every task importer (CSV paste, GitHub).
+// Always validates; only writes the error-free rows when `commit` is true, then
+// returns the same payload either way so the UI can preview before committing.
+function importTasks(projectId: number, csv: string, commit: boolean, userId: number): { imported: number; result: TaskImportResult } {
+  const users = db.prepare('SELECT id, name, email FROM users').all() as ImportUser[]
+  const result = buildTaskImport(csv, users)
+
+  let imported = 0
+  if (commit === true && result.validCount > 0) {
+    const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(projectId) as { mp: number }).mp || 0
+    const insert = db.prepare(`
+      INSERT INTO tasks (project_id, name, description, status, priority, assignee_id,
+        start_date, end_date, estimated_hours, story_points, wbs_code, position)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    const insertMany = db.transaction(() => {
+      let pos = maxPos
+      for (const row of result.rows) {
+        if (row.errors.length > 0) continue
+        pos++
+        insert.run(projectId, row.name, row.description, row.status, row.priority, row.assignee_id,
+          row.start_date, row.end_date, row.estimated_hours, row.story_points, row.wbs_code, pos)
+        imported++
+      }
+    })
+    insertMany()
+    db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
+      .run('project', projectId, userId, 'tasks_imported', JSON.stringify({ count: imported }))
+    emitToProject(projectId, 'task_changed', { action: 'imported', actor_id: userId })
+  }
+
+  return { imported, result }
+}
+
+function importPayload(committed: boolean, imported: number, result: TaskImportResult, extra: Record<string, unknown> = {}) {
+  return {
+    committed,
+    imported,
+    headers: result.headers,
+    mappedColumns: result.mappedColumns,
+    unmappedHeaders: result.unmappedHeaders,
+    validCount: result.validCount,
+    errorCount: result.errorCount,
+    rows: result.rows,
+    ...extra,
+  }
+}
 
 // When a recurring task is completed, spawn the next occurrence: a fresh copy
 // (status todo, progress reset) with dates shifted forward one period. Returns
@@ -328,43 +377,92 @@ router.post('/project/:projectId/import', authenticate, (req: Request, res: Resp
   const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
   if (!project) return res.status(404).json({ error: 'Project not found' })
 
-  const users = db.prepare('SELECT id, name, email FROM users').all() as ImportUser[]
-  const result = buildTaskImport(csv, users)
+  const { imported, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
+  res.json(importPayload(commit === true, imported, result))
+})
 
-  let imported = 0
-  if (commit === true && result.validCount > 0) {
-    const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(projectId) as { mp: number }).mp || 0
-    const insert = db.prepare(`
-      INSERT INTO tasks (project_id, name, description, status, priority, assignee_id,
-        start_date, end_date, estimated_hours, story_points, wbs_code, position)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    const insertMany = db.transaction(() => {
-      let pos = maxPos
-      for (const row of result.rows) {
-        if (row.errors.length > 0) continue
-        pos++
-        insert.run(projectId, row.name, row.description, row.status, row.priority, row.assignee_id,
-          row.start_date, row.end_date, row.estimated_hours, row.story_points, row.wbs_code, pos)
-        imported++
-      }
-    })
-    insertMany()
-    db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
-      .run('project', projectId, req.user!.userId, 'tasks_imported', JSON.stringify({ count: imported }))
-    emitToProject(projectId, 'task_changed', { action: 'imported', actor_id: req.user!.userId })
+// Inbound GitHub issue import. Pulls issues from a public (or, with a token,
+// private) repo over the GitHub REST API, maps them onto the task-import CSV
+// contract, then runs the SAME dry-run/commit pipeline as the CSV importer.
+// Pull requests are skipped. Dry-run by default; pass commit:true to insert.
+const GH_MAX_PAGES = 5 // up to 500 issues per import — keeps the call bounded
+const GH_PER_PAGE = 100
+// Defaults to github.com; override (no trailing slash) for GitHub Enterprise
+// Server, e.g. GITHUB_API_BASE=https://github.acme.com/api/v3
+const GH_API_BASE = (process.env.GITHUB_API_BASE || 'https://api.github.com').replace(/\/+$/, '')
+
+async function fetchGithubIssues(owner: string, repo: string, state: string, labels: string | undefined, token: string | undefined): Promise<GithubIssue[]> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'Portia-PPM',
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const all: GithubIssue[] = []
+  for (let page = 1; page <= GH_MAX_PAGES; page++) {
+    const params = new URLSearchParams({ state, per_page: String(GH_PER_PAGE), page: String(page) })
+    if (labels) params.set('labels', labels)
+    const url = `${GH_API_BASE}/repos/${owner}/${repo}/issues?${params.toString()}`
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15000)
+    let resp: globalThis.Response
+    try {
+      resp = await fetch(url, { headers, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+
+    if (!resp.ok) {
+      const status = resp.status
+      let message = `GitHub API returned ${status}`
+      if (status === 404) message = 'Repository not found (or private — provide a token with access)'
+      else if (status === 401) message = 'GitHub token is invalid'
+      else if (status === 403) message = 'GitHub API rate limit reached — provide a personal access token to raise it'
+      const err = new Error(message) as Error & { httpStatus?: number }
+      err.httpStatus = status
+      throw err
+    }
+
+    const batch = (await resp.json()) as GithubIssue[]
+    if (!Array.isArray(batch) || batch.length === 0) break
+    all.push(...batch)
+    if (batch.length < GH_PER_PAGE) break // last page
+  }
+  return all
+}
+
+router.post('/project/:projectId/import/github', authenticate, async (req: Request, res: Response) => {
+  const { repo, state, labels, token, commit } = req.body
+  const ref = parseGithubRepo(typeof repo === 'string' ? repo : '')
+  if (!ref) return res.status(400).json({ error: 'repo required — e.g. "owner/name" or a github.com URL' })
+
+  const projectId = Number(req.params.projectId)
+  const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+
+  const issueState = ['open', 'closed', 'all'].includes(state) ? state : 'open'
+  const labelFilter = typeof labels === 'string' && labels.trim() ? labels.trim() : undefined
+  const accessToken = typeof token === 'string' && token.trim() ? token.trim() : undefined
+
+  let issues: GithubIssue[]
+  try {
+    issues = await fetchGithubIssues(ref.owner, ref.repo, issueState, labelFilter, accessToken)
+  } catch (e) {
+    const err = e as Error & { httpStatus?: number; name?: string }
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'GitHub request timed out' })
+    return res.status(502).json({ error: err.message || 'Failed to reach GitHub' })
   }
 
-  res.json({
-    committed: commit === true,
-    imported,
-    headers: result.headers,
-    mappedColumns: result.mappedColumns,
-    unmappedHeaders: result.unmappedHeaders,
-    validCount: result.validCount,
-    errorCount: result.errorCount,
-    rows: result.rows,
-  })
+  const csv = githubIssuesToCsv(issues)
+  const { imported, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
+  res.json(importPayload(commit === true, imported, result, {
+    source: 'github',
+    repo: `${ref.owner}/${ref.repo}`,
+    fetched: issues.length,
+    importable: countImportableIssues(issues),
+  }))
 })
 
 export default router

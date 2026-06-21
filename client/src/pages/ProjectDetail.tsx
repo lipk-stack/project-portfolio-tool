@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload, Github } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi, insightsApi } from '../api'
 import { getSocket } from '../realtime'
 import { useAuthStore } from '../store'
@@ -10,6 +10,7 @@ import EVMDashboard from '../components/EVMDashboard'
 import ScenarioPlanner from '../components/ScenarioPlanner'
 import CustomFieldsManager from '../components/CustomFieldsManager'
 import ImportModal, { PreviewRow } from '../components/ImportModal'
+import GithubImportModal from '../components/GithubImportModal'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
@@ -51,6 +52,7 @@ export default function ProjectDetail() {
   const [exportOpen, setExportOpen] = useState(false)
   const [showFieldsManager, setShowFieldsManager] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [showGithubImport, setShowGithubImport] = useState(false)
   const [showRiskImport, setShowRiskImport] = useState(false)
   const [health, setHealth] = useState<ProjectHealth | null>(null)
   const [healthTrend, setHealthTrend] = useState<HealthTrend | null>(null)
@@ -367,6 +369,12 @@ export default function ProjectDetail() {
                 <Upload size={14} /> Import
               </button>
               <button
+                onClick={() => setShowGithubImport(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+              >
+                <Github size={14} /> GitHub
+              </button>
+              <button
                 onClick={() => setShowFieldsManager(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
               >
@@ -646,6 +654,14 @@ export default function ProjectDetail() {
           preview={csv => tasksApi.importCsv(project.id, csv, false)}
           commit={csv => tasksApi.importCsv(project.id, csv, true)}
           onClose={() => setShowImport(false)}
+          onImported={loadProject}
+        />
+      )}
+
+      {showGithubImport && (
+        <GithubImportModal
+          projectId={project.id}
+          onClose={() => setShowGithubImport(false)}
           onImported={loadProject}
         />
       )}

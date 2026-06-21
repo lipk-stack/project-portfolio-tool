@@ -26,6 +26,7 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Automations** | No-code rules engine: when task/risk events occur (with conditions), notify people, set priority, or add comments |
 | **Saved Views** | Save named filter combinations on the Projects page, with one-click recall |
 | **CSV Bulk Import** | Bulk-import **tasks and risks** from Excel / MS Project / Jira / Asana exports; smart header mapping, per-row validation, dry-run preview, and downloadable CSV templates — only error-free rows are committed |
+| **GitHub Issue Import** | Pull issues directly from any GitHub repository (or **GitHub Enterprise Server**) into tasks; issue state → status (closed → done), labels → priority, pull requests skipped, optional token & label filters, dry-run preview before commit |
 | **File Attachments** | Attach files (up to 10 MB) to any task with authenticated upload/download; stored alongside the database (Docker volume / gitignored data dir) |
 | **Recurring Tasks** | Daily/weekly/monthly recurrence; completing a task auto-spawns the next occurrence with dates shifted forward (duration preserved, optional end date) |
 | **PDF Reports** | One-page executive status report per project (EVM KPIs, milestones, top risks) |
