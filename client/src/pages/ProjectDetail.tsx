@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload, Github } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload, Github, Ticket } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi, insightsApi } from '../api'
 import { getSocket } from '../realtime'
 import { useAuthStore } from '../store'
@@ -11,6 +11,7 @@ import ScenarioPlanner from '../components/ScenarioPlanner'
 import CustomFieldsManager from '../components/CustomFieldsManager'
 import ImportModal, { PreviewRow } from '../components/ImportModal'
 import GithubImportModal from '../components/GithubImportModal'
+import JiraImportModal from '../components/JiraImportModal'
 import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
@@ -53,6 +54,7 @@ export default function ProjectDetail() {
   const [showFieldsManager, setShowFieldsManager] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showGithubImport, setShowGithubImport] = useState(false)
+  const [showJiraImport, setShowJiraImport] = useState(false)
   const [showRiskImport, setShowRiskImport] = useState(false)
   const [health, setHealth] = useState<ProjectHealth | null>(null)
   const [healthTrend, setHealthTrend] = useState<HealthTrend | null>(null)
@@ -375,6 +377,12 @@ export default function ProjectDetail() {
                 <Github size={14} /> GitHub
               </button>
               <button
+                onClick={() => setShowJiraImport(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+              >
+                <Ticket size={14} /> Jira
+              </button>
+              <button
                 onClick={() => setShowFieldsManager(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
               >
@@ -662,6 +670,14 @@ export default function ProjectDetail() {
         <GithubImportModal
           projectId={project.id}
           onClose={() => setShowGithubImport(false)}
+          onImported={loadProject}
+        />
+      )}
+
+      {showJiraImport && (
+        <JiraImportModal
+          projectId={project.id}
+          onClose={() => setShowJiraImport(false)}
           onImported={loadProject}
         />
       )}

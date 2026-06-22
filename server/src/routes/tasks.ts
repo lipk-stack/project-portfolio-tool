@@ -9,18 +9,31 @@ import { dispatchWebhooks } from '../lib/webhookDispatcher'
 import { computeNextOccurrence, isValidRecurrence } from '../lib/recurrence'
 import { buildTaskImport, ImportUser, TASK_IMPORT_TEMPLATE, TaskImportResult } from '../lib/csvImport'
 import { parseGithubRepo, githubIssuesToCsv, countImportableIssues, GithubIssue } from '../lib/githubImport'
+import { parseJiraBaseUrl, jiraIssuesToCsv, countImportableJira, JiraIssue } from '../lib/jiraImport'
 
 const router = Router()
 
-// Shared dry-run/commit pipeline behind every task importer (CSV paste, GitHub).
-// Always validates; only writes the error-free rows when `commit` is true, then
-// returns the same payload either way so the UI can preview before committing.
-function importTasks(projectId: number, csv: string, commit: boolean, userId: number): { imported: number; result: TaskImportResult } {
+// Shared dry-run/commit pipeline behind every task importer (CSV paste, GitHub,
+// Jira). Always validates; only writes the error-free rows when `commit` is
+// true, then returns the same payload either way so the UI can preview before
+// committing. DEDUPE-ON-REIMPORT: a valid row whose wbs_code already exists in
+// the project is skipped (counted in `skipped`, never inserted) — so re-syncing
+// a GitHub repo (GH-<n>) or Jira project (PROJ-<n>) doesn't duplicate tasks.
+// Rows with no wbs_code have no natural key and are always inserted.
+function importTasks(projectId: number, csv: string, commit: boolean, userId: number): { imported: number; skipped: number; result: TaskImportResult } {
   const users = db.prepare('SELECT id, name, email FROM users').all() as ImportUser[]
   const result = buildTaskImport(csv, users)
 
+  const existingWbs = new Set(
+    (db.prepare('SELECT wbs_code FROM tasks WHERE project_id = ? AND wbs_code IS NOT NULL').all(projectId) as Array<{ wbs_code: string }>)
+      .map(r => r.wbs_code)
+  )
+  const isDuplicate = (row: TaskImportResult['rows'][number]) => !!row.wbs_code && existingWbs.has(row.wbs_code)
+  // What WOULD be inserted: error-free, non-duplicate rows. Reported on dry-runs too.
+  const skipped = result.rows.filter(r => r.errors.length === 0 && isDuplicate(r)).length
+
   let imported = 0
-  if (commit === true && result.validCount > 0) {
+  if (commit === true && result.validCount - skipped > 0) {
     const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(projectId) as { mp: number }).mp || 0
     const insert = db.prepare(`
       INSERT INTO tasks (project_id, name, description, status, priority, assignee_id,
@@ -30,7 +43,7 @@ function importTasks(projectId: number, csv: string, commit: boolean, userId: nu
     const insertMany = db.transaction(() => {
       let pos = maxPos
       for (const row of result.rows) {
-        if (row.errors.length > 0) continue
+        if (row.errors.length > 0 || isDuplicate(row)) continue
         pos++
         insert.run(projectId, row.name, row.description, row.status, row.priority, row.assignee_id,
           row.start_date, row.end_date, row.estimated_hours, row.story_points, row.wbs_code, pos)
@@ -39,17 +52,18 @@ function importTasks(projectId: number, csv: string, commit: boolean, userId: nu
     })
     insertMany()
     db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
-      .run('project', projectId, userId, 'tasks_imported', JSON.stringify({ count: imported }))
+      .run('project', projectId, userId, 'tasks_imported', JSON.stringify({ count: imported, skipped }))
     emitToProject(projectId, 'task_changed', { action: 'imported', actor_id: userId })
   }
 
-  return { imported, result }
+  return { imported, skipped, result }
 }
 
-function importPayload(committed: boolean, imported: number, result: TaskImportResult, extra: Record<string, unknown> = {}) {
+function importPayload(committed: boolean, imported: number, skipped: number, result: TaskImportResult, extra: Record<string, unknown> = {}) {
   return {
     committed,
     imported,
+    skipped,
     headers: result.headers,
     mappedColumns: result.mappedColumns,
     unmappedHeaders: result.unmappedHeaders,
@@ -377,8 +391,8 @@ router.post('/project/:projectId/import', authenticate, (req: Request, res: Resp
   const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
   if (!project) return res.status(404).json({ error: 'Project not found' })
 
-  const { imported, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
-  res.json(importPayload(commit === true, imported, result))
+  const { imported, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
+  res.json(importPayload(commit === true, imported, skipped, result))
 })
 
 // Inbound GitHub issue import. Pulls issues from a public (or, with a token,
@@ -456,12 +470,111 @@ router.post('/project/:projectId/import/github', authenticate, async (req: Reque
   }
 
   const csv = githubIssuesToCsv(issues)
-  const { imported, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
-  res.json(importPayload(commit === true, imported, result, {
+  const { imported, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
+  res.json(importPayload(commit === true, imported, skipped, result, {
     source: 'github',
     repo: `${ref.owner}/${ref.repo}`,
     fetched: issues.length,
     importable: countImportableIssues(issues),
+  }))
+})
+
+// Inbound Jira issue import — the sibling of the GitHub importer. Fetches issues
+// from the Jira REST API (Jira Cloud /rest/api/3/search, Basic email:token auth),
+// maps them onto the task-import CSV contract, then runs the SAME dry-run/commit
+// pipeline. Dry-run by default; pass commit:true to insert. Jira assignee emails
+// resolve to local users; the Jira key becomes the wbs_code (so re-imports dedupe).
+const JIRA_MAX_PAGES = 5 // up to 500 issues per import — keeps the call bounded
+const JIRA_PER_PAGE = 100
+
+async function fetchJiraIssues(base: string, jql: string, email: string, token: string): Promise<JiraIssue[]> {
+  const auth = Buffer.from(`${email}:${token}`).toString('base64')
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'User-Agent': 'Portia-PPM',
+    Authorization: `Basic ${auth}`,
+  }
+  const fields = 'summary,description,status,priority,assignee,duedate,issuetype'
+
+  const all: JiraIssue[] = []
+  for (let page = 0; page < JIRA_MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      jql,
+      startAt: String(page * JIRA_PER_PAGE),
+      maxResults: String(JIRA_PER_PAGE),
+      fields,
+    })
+    const url = `${base}/rest/api/3/search?${params.toString()}`
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15000)
+    let resp: globalThis.Response
+    try {
+      resp = await fetch(url, { headers, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+
+    if (!resp.ok) {
+      const status = resp.status
+      let message = `Jira API returned ${status}`
+      if (status === 401) message = 'Jira authentication failed — check the email and API token'
+      else if (status === 403) message = 'Jira denied access — the account lacks permission for this project'
+      else if (status === 404) message = 'Jira site or endpoint not found — check the base URL'
+      else if (status === 400) {
+        // Jira returns its JQL parse errors in errorMessages — surface the first.
+        try {
+          const j = (await resp.json()) as { errorMessages?: string[] }
+          if (Array.isArray(j.errorMessages) && j.errorMessages.length) message = j.errorMessages[0]
+        } catch { /* keep generic message */ }
+      }
+      const err = new Error(message) as Error & { httpStatus?: number }
+      err.httpStatus = status
+      throw err
+    }
+
+    const body = (await resp.json()) as { issues?: JiraIssue[]; total?: number }
+    const batch = Array.isArray(body.issues) ? body.issues : []
+    all.push(...batch)
+    const total = typeof body.total === 'number' ? body.total : all.length
+    if (batch.length < JIRA_PER_PAGE || all.length >= total) break // last page
+  }
+  return all
+}
+
+router.post('/project/:projectId/import/jira', authenticate, async (req: Request, res: Response) => {
+  const { baseUrl, email, token, project, jql, commit } = req.body
+  const base = parseJiraBaseUrl(typeof baseUrl === 'string' ? baseUrl : '')
+  if (!base) return res.status(400).json({ error: 'baseUrl required — e.g. "your-site.atlassian.net"' })
+  if (typeof email !== 'string' || !email.trim()) return res.status(400).json({ error: 'email required (your Atlassian account email)' })
+  if (typeof token !== 'string' || !token.trim()) return res.status(400).json({ error: 'token required (a Jira API token)' })
+
+  const projectKey = typeof project === 'string' && project.trim() ? project.trim() : undefined
+  const jqlRaw = typeof jql === 'string' && jql.trim() ? jql.trim() : undefined
+  if (!projectKey && !jqlRaw) return res.status(400).json({ error: 'project (a Jira project key) or jql is required' })
+  // A bare project key is the common case; an explicit JQL takes precedence.
+  const effectiveJql = jqlRaw || `project = "${projectKey}" ORDER BY updated DESC`
+
+  const projectId = Number(req.params.projectId)
+  const projectRow = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
+  if (!projectRow) return res.status(404).json({ error: 'Project not found' })
+
+  let issues: JiraIssue[]
+  try {
+    issues = await fetchJiraIssues(base, effectiveJql, email.trim(), token.trim())
+  } catch (e) {
+    const err = e as Error & { httpStatus?: number; name?: string }
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Jira request timed out' })
+    return res.status(502).json({ error: err.message || 'Failed to reach Jira' })
+  }
+
+  const csv = jiraIssuesToCsv(issues, { browseBase: base })
+  const { imported, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
+  res.json(importPayload(commit === true, imported, skipped, result, {
+    source: 'jira',
+    project: projectKey || effectiveJql,
+    fetched: issues.length,
+    importable: countImportableJira(issues),
   }))
 })
 

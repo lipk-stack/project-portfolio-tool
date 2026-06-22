@@ -85,6 +85,8 @@ export const tasksApi = {
   importTemplateUrl: () => '/api/tasks/import/template',
   importGithub: (projectId: number, opts: { repo: string; state?: string; labels?: string; token?: string; commit: boolean }) =>
     api.post(`/tasks/project/${projectId}/import/github`, opts),
+  importJira: (projectId: number, opts: { baseUrl: string; email: string; token: string; project?: string; jql?: string; commit: boolean }) =>
+    api.post(`/tasks/project/${projectId}/import/jira`, opts),
 }
 
 export const attachmentsApi = {
