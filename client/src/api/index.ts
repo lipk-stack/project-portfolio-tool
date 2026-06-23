@@ -83,9 +83,9 @@ export const tasksApi = {
   updateStatus: (id: number, status: string) => api.patch(`/tasks/${id}/status`, { status }),
   importCsv: (projectId: number, csv: string, commit: boolean) => api.post(`/tasks/project/${projectId}/import`, { csv, commit }),
   importTemplateUrl: () => '/api/tasks/import/template',
-  importGithub: (projectId: number, opts: { repo: string; state?: string; labels?: string; token?: string; commit: boolean }) =>
+  importGithub: (projectId: number, opts: { repo: string; state?: string; labels?: string; token?: string; commit: boolean; sync?: boolean }) =>
     api.post(`/tasks/project/${projectId}/import/github`, opts),
-  importJira: (projectId: number, opts: { baseUrl: string; email: string; token: string; project?: string; jql?: string; commit: boolean }) =>
+  importJira: (projectId: number, opts: { baseUrl: string; email: string; token: string; project?: string; jql?: string; commit: boolean; sync?: boolean }) =>
     api.post(`/tasks/project/${projectId}/import/jira`, opts),
 }
 

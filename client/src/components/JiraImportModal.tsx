@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Ticket, Upload, AlertTriangle, CheckCircle2, CopyMinus } from 'lucide-react'
+import { Ticket, Upload, AlertTriangle, CheckCircle2, CopyMinus, RefreshCw } from 'lucide-react'
 import Modal from './ui/Modal'
 import { tasksApi } from '../api'
 
@@ -7,6 +7,8 @@ interface PreviewRow { row: number; name: string; status: string; priority: stri
 interface PreviewData {
   validCount: number
   errorCount: number
+  imported?: number
+  updated?: number
   skipped?: number
   rows: PreviewRow[]
   project?: string
@@ -30,6 +32,7 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
   const [token, setToken] = useState('')
   const [project, setProject] = useState('')
   const [jql, setJql] = useState('')
+  const [sync, setSync] = useState(false)
   const [data, setData] = useState<PreviewData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +40,7 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
   const ready = baseUrl.trim() && email.trim() && token.trim() && (project.trim() || jql.trim())
   const opts = (commit: boolean) => ({
     baseUrl: baseUrl.trim(), email: email.trim(), token: token.trim(),
-    project: project.trim() || undefined, jql: jql.trim() || undefined, commit,
+    project: project.trim() || undefined, jql: jql.trim() || undefined, commit, sync,
   })
 
   const runPreview = async () => {
@@ -66,7 +69,9 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
     }
   }
 
-  const newCount = data ? data.validCount - (data.skipped || 0) : 0
+  const newCount = data?.imported ?? 0
+  const updatedCount = data?.updated ?? 0
+  const applyCount = newCount + updatedCount
 
   return (
     <Modal
@@ -79,11 +84,11 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
           <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
           <button
             onClick={doCommit}
-            disabled={loading || !data || newCount === 0}
+            disabled={loading || !data || applyCount === 0}
             className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             <Upload size={14} className="inline mr-1.5 -mt-0.5" />
-            Import {data ? `${newCount} task${newCount === 1 ? '' : 's'}` : ''}
+            {sync ? 'Sync' : 'Import'} {data ? `${applyCount} task${applyCount === 1 ? '' : 's'}` : ''}
           </button>
         </>
       }
@@ -94,7 +99,7 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
           (<span className="font-mono text-xs">To Do → todo, In Progress → in_progress, Done → done</span>) and priority from the Jira
           priority. The <strong>assignee email</strong> is matched to a local user. Create an API token at{' '}
           <span className="font-mono text-xs">id.atlassian.com/manage-profile/security/api-tokens</span>. Issues you've imported before
-          (matched by Jira key) are skipped, so re-running keeps tasks in sync without duplicates.
+          (matched by Jira key) are skipped — or tick <strong>Update existing tasks</strong> to refresh their status, priority and assignee in place.
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -129,6 +134,10 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
           <button onClick={runPreview} disabled={loading || !ready} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
             <Ticket size={14} /> {loading ? 'Fetching…' : 'Fetch & preview'}
           </button>
+          <label className="inline-flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer" title="Update status, priority and assignee of issues you've already imported, instead of skipping them">
+            <input type="checkbox" checked={sync} onChange={e => { setSync(e.target.checked); setData(null) }} className="rounded border-gray-300" />
+            Update existing tasks (sync)
+          </label>
           {error && <span className="text-sm text-red-600">{error}</span>}
         </div>
 
@@ -136,7 +145,8 @@ export default function JiraImportModal({ projectId, onClose, onImported }: Prop
           <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center gap-4 mb-2 text-sm flex-wrap">
               <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 size={14} /> {newCount} new</span>
-              {!!data.skipped && <span className="inline-flex items-center gap-1 text-amber-600"><CopyMinus size={14} /> {data.skipped} already imported</span>}
+              {sync && !!updatedCount && <span className="inline-flex items-center gap-1 text-blue-600"><RefreshCw size={14} /> {updatedCount} to update</span>}
+              {!!data.skipped && <span className="inline-flex items-center gap-1 text-amber-600"><CopyMinus size={14} /> {data.skipped} {sync ? 'unchanged' : 'already imported'}</span>}
               {data.errorCount > 0 && <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle size={14} /> {data.errorCount} with errors</span>}
               <span className="text-gray-400">{data.project} · {data.fetched} fetched · {data.importable} importable</span>
             </div>

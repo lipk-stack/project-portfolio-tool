@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Upload, AlertTriangle, CheckCircle2, CopyMinus } from 'lucide-react'
+import { Github, Upload, AlertTriangle, CheckCircle2, CopyMinus, RefreshCw } from 'lucide-react'
 import Modal from './ui/Modal'
 import { tasksApi } from '../api'
 
@@ -7,6 +7,8 @@ interface PreviewRow { row: number; name: string; status: string; priority: stri
 interface PreviewData {
   validCount: number
   errorCount: number
+  imported?: number
+  updated?: number
   skipped?: number
   rows: PreviewRow[]
   repo?: string
@@ -29,13 +31,16 @@ export default function GithubImportModal({ projectId, onClose, onImported }: Pr
   const [state, setState] = useState('open')
   const [labels, setLabels] = useState('')
   const [token, setToken] = useState('')
+  const [sync, setSync] = useState(false)
   const [data, setData] = useState<PreviewData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const opts = (commit: boolean) => ({ repo: repo.trim(), state, labels: labels.trim() || undefined, token: token.trim() || undefined, commit })
+  const opts = (commit: boolean) => ({ repo: repo.trim(), state, labels: labels.trim() || undefined, token: token.trim() || undefined, commit, sync })
 
-  const newCount = data ? data.validCount - (data.skipped || 0) : 0
+  const newCount = data?.imported ?? 0
+  const updatedCount = data?.updated ?? 0
+  const applyCount = newCount + updatedCount
 
   const runPreview = async () => {
     if (!repo.trim()) return
@@ -74,11 +79,11 @@ export default function GithubImportModal({ projectId, onClose, onImported }: Pr
           <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Cancel</button>
           <button
             onClick={doCommit}
-            disabled={loading || !data || newCount === 0}
+            disabled={loading || !data || applyCount === 0}
             className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             <Upload size={14} className="inline mr-1.5 -mt-0.5" />
-            Import {data ? `${newCount} task${newCount === 1 ? '' : 's'}` : ''}
+            {sync ? 'Sync' : 'Import'} {data ? `${applyCount} task${applyCount === 1 ? '' : 's'}` : ''}
           </button>
         </>
       }
@@ -116,10 +121,14 @@ export default function GithubImportModal({ projectId, onClose, onImported }: Pr
           </label>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button onClick={runPreview} disabled={loading || !repo.trim()} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50">
             <Github size={14} /> {loading ? 'Fetching…' : 'Fetch & preview'}
           </button>
+          <label className="inline-flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer" title="Update status, priority and assignee of issues you've already imported, instead of skipping them">
+            <input type="checkbox" checked={sync} onChange={e => { setSync(e.target.checked); setData(null) }} className="rounded border-gray-300" />
+            Update existing tasks (sync)
+          </label>
           {error && <span className="text-sm text-red-600">{error}</span>}
         </div>
 
@@ -127,7 +136,8 @@ export default function GithubImportModal({ projectId, onClose, onImported }: Pr
           <div className="border-t border-gray-100 pt-3">
             <div className="flex items-center gap-4 mb-2 text-sm">
               <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 size={14} /> {newCount} new</span>
-              {!!data.skipped && <span className="inline-flex items-center gap-1 text-amber-600"><CopyMinus size={14} /> {data.skipped} already imported</span>}
+              {sync && !!updatedCount && <span className="inline-flex items-center gap-1 text-blue-600"><RefreshCw size={14} /> {updatedCount} to update</span>}
+              {!!data.skipped && <span className="inline-flex items-center gap-1 text-amber-600"><CopyMinus size={14} /> {data.skipped} {sync ? 'unchanged' : 'already imported'}</span>}
               {data.errorCount > 0 && <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle size={14} /> {data.errorCount} with errors</span>}
               <span className="text-gray-400">{data.repo} · {data.fetched} fetched · {data.importable} importable (PRs skipped)</span>
             </div>

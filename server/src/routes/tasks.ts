@@ -15,54 +15,76 @@ const router = Router()
 
 // Shared dry-run/commit pipeline behind every task importer (CSV paste, GitHub,
 // Jira). Always validates; only writes the error-free rows when `commit` is
-// true, then returns the same payload either way so the UI can preview before
-// committing. DEDUPE-ON-REIMPORT: a valid row whose wbs_code already exists in
-// the project is skipped (counted in `skipped`, never inserted) — so re-syncing
-// a GitHub repo (GH-<n>) or Jira project (PROJ-<n>) doesn't duplicate tasks.
+// true, then returns the same plan either way so the UI can preview before
+// committing. A valid row whose wbs_code already exists in the project is a
+// "duplicate" keyed by that natural code (GH-<n> for GitHub, the Jira key, or a
+// user-supplied CSV wbs). Duplicates are handled two ways:
+//   - DEDUPE (default): the duplicate is skipped, never touched.
+//   - SYNC (`sync` = true): the existing task's status/priority/assignee are
+//     updated in place when any of them differs; an identical row is a no-op and
+//     still counted as skipped. This keeps re-imported tracker tasks current
+//     without creating duplicates.
 // Rows with no wbs_code have no natural key and are always inserted.
-function importTasks(projectId: number, csv: string, commit: boolean, userId: number): { imported: number; skipped: number; result: TaskImportResult } {
+// `imported`/`updated` describe the plan (== what's realized on commit, since
+// every planned row is error-free and applies cleanly); writes only happen when
+// `commit` is true.
+function importTasks(projectId: number, csv: string, commit: boolean, userId: number, sync = false): { imported: number; updated: number; skipped: number; result: TaskImportResult } {
   const users = db.prepare('SELECT id, name, email FROM users').all() as ImportUser[]
   const result = buildTaskImport(csv, users)
 
-  const existingWbs = new Set(
-    (db.prepare('SELECT wbs_code FROM tasks WHERE project_id = ? AND wbs_code IS NOT NULL').all(projectId) as Array<{ wbs_code: string }>)
-      .map(r => r.wbs_code)
-  )
-  const isDuplicate = (row: TaskImportResult['rows'][number]) => !!row.wbs_code && existingWbs.has(row.wbs_code)
-  // What WOULD be inserted: error-free, non-duplicate rows. Reported on dry-runs too.
-  const skipped = result.rows.filter(r => r.errors.length === 0 && isDuplicate(r)).length
+  // Existing wbs_code -> task, for dedupe (skip) or in-place update (sync).
+  const existing = new Map<string, { id: number; status: string; priority: string; assignee_id: number | null }>()
+  for (const r of db.prepare('SELECT id, wbs_code, status, priority, assignee_id FROM tasks WHERE project_id = ? AND wbs_code IS NOT NULL').all(projectId) as Array<{ id: number; wbs_code: string; status: string; priority: string; assignee_id: number | null }>) {
+    existing.set(r.wbs_code, { id: r.id, status: r.status, priority: r.priority, assignee_id: r.assignee_id })
+  }
 
-  let imported = 0
-  if (commit === true && result.validCount - skipped > 0) {
-    const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(projectId) as { mp: number }).mp || 0
+  const validRows = result.rows.filter(r => r.errors.length === 0)
+  const newRows = validRows.filter(r => !r.wbs_code || !existing.has(r.wbs_code))
+  const dupRows = validRows.filter(r => !!r.wbs_code && existing.has(r.wbs_code))
+  // A duplicate is updated (sync mode only) when a synced field differs; an
+  // identical duplicate is a no-op and counted as skipped.
+  const differs = (row: TaskImportResult['rows'][number]) => {
+    const e = existing.get(row.wbs_code!)!
+    return e.status !== row.status || e.priority !== row.priority || (e.assignee_id ?? null) !== (row.assignee_id ?? null)
+  }
+  const updateRows = sync ? dupRows.filter(differs) : []
+  const imported = newRows.length
+  const updated = updateRows.length
+  const skipped = dupRows.length - updated
+
+  if (commit === true && (imported > 0 || updated > 0)) {
     const insert = db.prepare(`
       INSERT INTO tasks (project_id, name, description, status, priority, assignee_id,
         start_date, end_date, estimated_hours, story_points, wbs_code, position)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    const insertMany = db.transaction(() => {
+    const update = db.prepare('UPDATE tasks SET status = ?, priority = ?, assignee_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    const maxPos = (db.prepare('SELECT MAX(position) as mp FROM tasks WHERE project_id = ?').get(projectId) as { mp: number }).mp || 0
+    const apply = db.transaction(() => {
       let pos = maxPos
-      for (const row of result.rows) {
-        if (row.errors.length > 0 || isDuplicate(row)) continue
+      for (const row of newRows) {
         pos++
         insert.run(projectId, row.name, row.description, row.status, row.priority, row.assignee_id,
           row.start_date, row.end_date, row.estimated_hours, row.story_points, row.wbs_code, pos)
-        imported++
+      }
+      for (const row of updateRows) {
+        update.run(row.status, row.priority, row.assignee_id ?? null, existing.get(row.wbs_code!)!.id)
       }
     })
-    insertMany()
+    apply()
     db.prepare('INSERT INTO activity_log (entity_type, entity_id, user_id, action, details) VALUES (?, ?, ?, ?, ?)')
-      .run('project', projectId, userId, 'tasks_imported', JSON.stringify({ count: imported, skipped }))
+      .run('project', projectId, userId, 'tasks_imported', JSON.stringify({ count: imported, updated, skipped }))
     emitToProject(projectId, 'task_changed', { action: 'imported', actor_id: userId })
   }
 
-  return { imported, skipped, result }
+  return { imported, updated, skipped, result }
 }
 
-function importPayload(committed: boolean, imported: number, skipped: number, result: TaskImportResult, extra: Record<string, unknown> = {}) {
+function importPayload(committed: boolean, imported: number, updated: number, skipped: number, result: TaskImportResult, extra: Record<string, unknown> = {}) {
   return {
     committed,
     imported,
+    updated,
     skipped,
     headers: result.headers,
     mappedColumns: result.mappedColumns,
@@ -391,8 +413,8 @@ router.post('/project/:projectId/import', authenticate, (req: Request, res: Resp
   const project = db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)
   if (!project) return res.status(404).json({ error: 'Project not found' })
 
-  const { imported, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
-  res.json(importPayload(commit === true, imported, skipped, result))
+  const { imported, updated, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
+  res.json(importPayload(commit === true, imported, updated, skipped, result))
 })
 
 // Inbound GitHub issue import. Pulls issues from a public (or, with a token,
@@ -448,7 +470,7 @@ async function fetchGithubIssues(owner: string, repo: string, state: string, lab
 }
 
 router.post('/project/:projectId/import/github', authenticate, async (req: Request, res: Response) => {
-  const { repo, state, labels, token, commit } = req.body
+  const { repo, state, labels, token, commit, sync } = req.body
   const ref = parseGithubRepo(typeof repo === 'string' ? repo : '')
   if (!ref) return res.status(400).json({ error: 'repo required — e.g. "owner/name" or a github.com URL' })
 
@@ -470,8 +492,8 @@ router.post('/project/:projectId/import/github', authenticate, async (req: Reque
   }
 
   const csv = githubIssuesToCsv(issues)
-  const { imported, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
-  res.json(importPayload(commit === true, imported, skipped, result, {
+  const { imported, updated, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId, sync === true)
+  res.json(importPayload(commit === true, imported, updated, skipped, result, {
     source: 'github',
     repo: `${ref.owner}/${ref.repo}`,
     fetched: issues.length,
@@ -543,7 +565,7 @@ async function fetchJiraIssues(base: string, jql: string, email: string, token: 
 }
 
 router.post('/project/:projectId/import/jira', authenticate, async (req: Request, res: Response) => {
-  const { baseUrl, email, token, project, jql, commit } = req.body
+  const { baseUrl, email, token, project, jql, commit, sync } = req.body
   const base = parseJiraBaseUrl(typeof baseUrl === 'string' ? baseUrl : '')
   if (!base) return res.status(400).json({ error: 'baseUrl required — e.g. "your-site.atlassian.net"' })
   if (typeof email !== 'string' || !email.trim()) return res.status(400).json({ error: 'email required (your Atlassian account email)' })
@@ -569,8 +591,8 @@ router.post('/project/:projectId/import/jira', authenticate, async (req: Request
   }
 
   const csv = jiraIssuesToCsv(issues, { browseBase: base })
-  const { imported, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId)
-  res.json(importPayload(commit === true, imported, skipped, result, {
+  const { imported, updated, skipped, result } = importTasks(projectId, csv, commit === true, req.user!.userId, sync === true)
+  res.json(importPayload(commit === true, imported, updated, skipped, result, {
     source: 'jira',
     project: projectKey || effectiveJql,
     fetched: issues.length,
