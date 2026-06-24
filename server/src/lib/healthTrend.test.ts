@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { summarizeTrend, aggregatePortfolioTrend, detectRedTransitions, ragForScore, TrendPoint } from './healthTrend'
+import { summarizeTrend, aggregatePortfolioTrend, detectRedTransitions, detectHealthRecoveries, ragForScore, TrendPoint } from './healthTrend'
 
 describe('summarizeTrend', () => {
   it('returns an empty/flat summary for no data', () => {
@@ -139,5 +139,35 @@ describe('detectRedTransitions', () => {
       { id: 2, name: 'Beta', rag: 'green' },
     ]
     expect(detectRedTransitions(prev, curr)).toEqual([])
+  })
+})
+
+describe('detectHealthRecoveries', () => {
+  const prev = [
+    { id: 1, name: 'Alpha', rag: 'red' },
+    { id: 2, name: 'Beta', rag: 'amber' },
+    { id: 3, name: 'Gamma', rag: 'red' },
+  ]
+
+  it('flags projects that climbed out of red', () => {
+    const curr = [
+      { id: 1, name: 'Alpha', rag: 'amber' }, // red -> amber: recovered
+      { id: 2, name: 'Beta', rag: 'green' }, // was amber: not a recovery
+      { id: 3, name: 'Gamma', rag: 'red' }, // still red: not a recovery
+    ]
+    expect(detectHealthRecoveries(prev, curr).map((p) => p.id)).toEqual([1])
+  })
+
+  it('does not flag projects with no prior snapshot', () => {
+    const curr = [{ id: 9, name: 'NewGreen', rag: 'green' }]
+    expect(detectHealthRecoveries(prev, curr)).toEqual([])
+  })
+
+  it('returns nothing when every red project stayed red', () => {
+    const curr = [
+      { id: 1, name: 'Alpha', rag: 'red' },
+      { id: 3, name: 'Gamma', rag: 'red' },
+    ]
+    expect(detectHealthRecoveries(prev, curr)).toEqual([])
   })
 })

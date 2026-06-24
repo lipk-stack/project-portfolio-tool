@@ -89,3 +89,14 @@ export function detectRedTransitions(prev: RagSnapshot[], curr: RagSnapshot[]): 
     return c.rag === 'red' && before !== undefined && before !== 'red'
   })
 }
+
+// The mirror of detectRedTransitions: projects that recovered OUT of red (were
+// red yesterday, green or amber today). Projects with no prior snapshot are
+// skipped for the same reason — a brand-new healthy project hasn't "recovered".
+export function detectHealthRecoveries(prev: RagSnapshot[], curr: RagSnapshot[]): RagSnapshot[] {
+  const prevRag = new Map(prev.map((p) => [p.id, p.rag]))
+  return curr.filter((c) => {
+    const before = prevRag.get(c.id)
+    return before === 'red' && c.rag !== 'red'
+  })
+}

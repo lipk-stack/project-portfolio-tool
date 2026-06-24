@@ -8,6 +8,7 @@ export type TriggerType =
   | 'risk_created'
   | 'risk_updated'
   | 'project_health_red'
+  | 'project_health_improved'
 
 export type ActionType = 'notify_manager' | 'notify_user' | 'set_task_priority' | 'add_comment'
 
@@ -106,5 +107,7 @@ export function describeEvent(event: AutomationEvent): string {
       return `Risk "${event.risk?.title}" was updated (score ${event.risk?.score})`
     case 'project_health_red':
       return `Project "${event.project?.name}" health turned RED (score ${event.project?.score})`
+    case 'project_health_improved':
+      return `Project "${event.project?.name}" health recovered to ${event.project?.toRag?.toUpperCase()} (score ${event.project?.score})`
   }
 }

@@ -27,6 +27,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   risk_created: 'Risk is identified',
   risk_updated: 'Risk is updated',
   project_health_red: 'Project health turns red',
+  project_health_improved: 'Project health recovers',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -269,7 +270,9 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
             <input type="number" min={1} max={16} value={minScore} onChange={e => setMinScore(e.target.value)} placeholder="e.g. 6" className={inputCls} />
           </div>
         ) : (
-          <p className="text-xs text-gray-500">No conditions — this rule fires whenever the project's daily health snapshot crosses into the red band.</p>
+          <p className="text-xs text-gray-500">
+            No conditions — this rule fires whenever the project's daily health snapshot {trigger === 'project_health_improved' ? 'climbs back out of the red band' : 'crosses into the red band'}.
+          </p>
         )}
       </div>
 

@@ -8,7 +8,7 @@
 import { db } from '../database'
 import { computeEarnedSchedule } from './earnedSchedule'
 import { computeProjectHealth, ProjectHealthResult } from './projectHealth'
-import { TrendPoint, ragForScore, aggregatePortfolioTrend, detectRedTransitions, RagSnapshot } from './healthTrend'
+import { TrendPoint, ragForScore, aggregatePortfolioTrend, detectRedTransitions, detectHealthRecoveries, RagSnapshot } from './healthTrend'
 import { createNotification } from './notify'
 import { runAutomations } from './automationRunner'
 
@@ -193,6 +193,52 @@ export function notifyRedTransitions(today = isoDaysAgo(0), yesterday = isoDaysA
         type: 'project_health_red',
         projectId: proj.id,
         project: { id: proj.id, name: proj.name, score: scoreRow?.score ?? 0, fromRag: prevRagById.get(proj.id), toRag: 'red' },
+      },
+      SYSTEM_ACTOR_ID
+    )
+    notified.push(proj.name)
+  }
+  return notified
+}
+
+// The mirror of notifyRedTransitions: when a project climbs back OUT of the red
+// band day-over-day, send a "recovered" notification to managers/admins and
+// fire any `project_health_improved` automation rule. Idempotent per project
+// per day via a type='health_green' marker — a server restart won't re-fire.
+// Call after recordDailySnapshots(); never on fresh-DB bootstrap.
+export function notifyHealthRecoveries(today = isoDaysAgo(0), yesterday = isoDaysAgo(1)): string[] {
+  const prevSnap = ragSnapshotForDate(yesterday)
+  const currSnap = ragSnapshotForDate(today)
+  const recovered = detectHealthRecoveries(prevSnap, currSnap)
+  if (recovered.length === 0) return []
+
+  const currRagById = new Map(currSnap.map((s) => [s.id, s.rag]))
+  const scoreOnDay = db.prepare('SELECT score FROM health_history WHERE project_id = ? AND date = ?')
+  const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all() as Array<{ id: number }>
+  const alreadyAlerted = db.prepare(
+    "SELECT 1 FROM notifications WHERE type = 'health_green' AND link = ? AND date(created_at) = ?"
+  )
+  const notified: string[] = []
+
+  for (const proj of recovered) {
+    const link = `/projects/${proj.id}`
+    if (alreadyAlerted.get(link, today)) continue // de-dupe within the day
+
+    const toRag = currRagById.get(proj.id) ?? 'green'
+    const manager = db.prepare('SELECT manager_id FROM projects WHERE id = ?').get(proj.id) as { manager_id: number | null } | undefined
+    const recipients = new Set<number>(admins.map((a) => a.id))
+    if (manager?.manager_id) recipients.add(manager.manager_id)
+
+    const title = `Health recovered: ${proj.name} is back to ${toRag.toUpperCase()}`
+    const message = `${proj.name} climbed out of the red health band today (now ${toRag}).`
+    for (const userId of recipients) createNotification(userId, 'health_green', title, message, link)
+
+    const scoreRow = scoreOnDay.get(proj.id, today) as { score: number } | undefined
+    runAutomations(
+      {
+        type: 'project_health_improved',
+        projectId: proj.id,
+        project: { id: proj.id, name: proj.name, score: scoreRow?.score ?? 0, fromRag: 'red', toRag },
       },
       SYSTEM_ACTOR_ID
     )

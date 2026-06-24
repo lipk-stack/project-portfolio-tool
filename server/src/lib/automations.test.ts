@@ -107,6 +107,12 @@ describe('ruleMatches', () => {
     expect(ruleMatches(rule({ trigger_type: 'project_health_red' }), event)).toBe(false)
   })
 
+  it('matches a project_health_improved rule', () => {
+    const r = rule({ trigger_type: 'project_health_improved' })
+    const event: AutomationEvent = { type: 'project_health_improved', projectId: 10, project: { id: 10, name: 'Apollo', score: 72, fromRag: 'red', toRag: 'amber' } }
+    expect(ruleMatches(r, event)).toBe(true)
+  })
+
   it('treats malformed conditions JSON as unconditional', () => {
     expect(ruleMatches(rule({ conditions: '{broken' }), taskEvent())).toBe(true)
   })
@@ -127,5 +133,12 @@ describe('describeEvent', () => {
     expect(describeEvent(event)).toContain('Apollo')
     expect(describeEvent(event)).toContain('RED')
     expect(describeEvent(event)).toContain('42')
+  })
+  it('describes a project health recovery', () => {
+    const event: AutomationEvent = { type: 'project_health_improved', projectId: 1, project: { id: 1, name: 'Apollo', score: 72, fromRag: 'red', toRag: 'amber' } }
+    expect(describeEvent(event)).toContain('Apollo')
+    expect(describeEvent(event)).toContain('recovered')
+    expect(describeEvent(event)).toContain('AMBER')
+    expect(describeEvent(event)).toContain('72')
   })
 })

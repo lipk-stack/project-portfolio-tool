@@ -6,7 +6,7 @@ import path from 'path'
 import http from 'http'
 import { initializeDatabase, db } from './database'
 import { initRealtime } from './lib/realtime'
-import { recordDailySnapshots, backfillDemoHistory, notifyRedTransitions } from './lib/healthService'
+import { recordDailySnapshots, backfillDemoHistory, notifyRedTransitions, notifyHealthRecoveries } from './lib/healthService'
 
 import authRoutes from './routes/auth'
 import dashboardRoutes from './routes/dashboard'
@@ -51,6 +51,8 @@ try {
   if (!freshHistory) {
     const alerted = notifyRedTransitions()
     if (alerted.length) console.log(`⚠️  Health alerts raised for: ${alerted.join(', ')}`)
+    const recovered = notifyHealthRecoveries()
+    if (recovered.length) console.log(`✅ Health recoveries noted for: ${recovered.join(', ')}`)
   }
 } catch (err) {
   console.error('Health snapshot bootstrap failed:', err)
