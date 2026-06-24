@@ -10,6 +10,12 @@ import { computeEarnedSchedule } from './earnedSchedule'
 import { computeProjectHealth, ProjectHealthResult } from './projectHealth'
 import { TrendPoint, ragForScore, aggregatePortfolioTrend, detectRedTransitions, RagSnapshot } from './healthTrend'
 import { createNotification } from './notify'
+import { runAutomations } from './automationRunner'
+
+// System actor id for automation events not triggered by a logged-in user (the
+// daily health snapshot job). 0 never matches a real user, so notify_manager /
+// notify_user actions still fire correctly (they only skip the actor itself).
+const SYSTEM_ACTOR_ID = 0
 
 export interface ProjectRow {
   id: number
@@ -153,9 +159,12 @@ function ragSnapshotForDate(dateStr: string): RagSnapshot[] {
 // holding both today's and yesterday's snapshots (recordDailySnapshots is the
 // writer; this should be called after it).
 export function notifyRedTransitions(today = isoDaysAgo(0), yesterday = isoDaysAgo(1)): string[] {
-  const dropped = detectRedTransitions(ragSnapshotForDate(yesterday), ragSnapshotForDate(today))
+  const prevSnap = ragSnapshotForDate(yesterday)
+  const dropped = detectRedTransitions(prevSnap, ragSnapshotForDate(today))
   if (dropped.length === 0) return []
 
+  const prevRagById = new Map(prevSnap.map((s) => [s.id, s.rag]))
+  const scoreOnDay = db.prepare('SELECT score FROM health_history WHERE project_id = ? AND date = ?')
   const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all() as Array<{ id: number }>
   const alreadyAlerted = db.prepare(
     "SELECT 1 FROM notifications WHERE type = 'health_red' AND link = ? AND date(created_at) = ?"
@@ -173,6 +182,20 @@ export function notifyRedTransitions(today = isoDaysAgo(0), yesterday = isoDaysA
     const title = `Health alert: ${proj.name} turned RED`
     const message = `${proj.name} dropped into the red health band today. Review schedule, budget and open risks.`
     for (const userId of recipients) createNotification(userId, 'health_red', title, message, link)
+
+    // Let user-configured automation rules react to the same signal (e.g.
+    // notify a specific stakeholder). The built-in manager/admin alert above is
+    // always sent; automations are additive. Guarded by the same once-per-day
+    // de-dupe, so a server restart won't re-fire rules.
+    const scoreRow = scoreOnDay.get(proj.id, today) as { score: number } | undefined
+    runAutomations(
+      {
+        type: 'project_health_red',
+        projectId: proj.id,
+        project: { id: proj.id, name: proj.name, score: scoreRow?.score ?? 0, fromRag: prevRagById.get(proj.id), toRag: 'red' },
+      },
+      SYSTEM_ACTOR_ID
+    )
     notified.push(proj.name)
   }
   return notified

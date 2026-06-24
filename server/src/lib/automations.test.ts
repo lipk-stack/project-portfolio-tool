@@ -90,6 +90,23 @@ describe('ruleMatches', () => {
     expect(ruleMatches(rule(), event)).toBe(false)
   })
 
+  it('matches an unconditional project_health_red rule', () => {
+    const r = rule({ trigger_type: 'project_health_red' })
+    const event: AutomationEvent = { type: 'project_health_red', projectId: 10, project: { id: 10, name: 'Apollo', score: 40, toRag: 'red', fromRag: 'amber' } }
+    expect(ruleMatches(r, event)).toBe(true)
+  })
+
+  it('scopes project_health_red rules to a project', () => {
+    const event: AutomationEvent = { type: 'project_health_red', projectId: 10, project: { id: 10, name: 'Apollo', score: 40, toRag: 'red' } }
+    expect(ruleMatches(rule({ trigger_type: 'project_health_red', project_id: 10 }), event)).toBe(true)
+    expect(ruleMatches(rule({ trigger_type: 'project_health_red', project_id: 99 }), event)).toBe(false)
+  })
+
+  it('rejects project rules when the event has no project payload', () => {
+    const event = { type: 'project_health_red', projectId: 10 } as AutomationEvent
+    expect(ruleMatches(rule({ trigger_type: 'project_health_red' }), event)).toBe(false)
+  })
+
   it('treats malformed conditions JSON as unconditional', () => {
     expect(ruleMatches(rule({ conditions: '{broken' }), taskEvent())).toBe(true)
   })
@@ -104,5 +121,11 @@ describe('describeEvent', () => {
     const event: AutomationEvent = { type: 'risk_created', projectId: 1, risk: { id: 1, title: 'Outage', score: 8 } }
     expect(describeEvent(event)).toContain('Outage')
     expect(describeEvent(event)).toContain('8')
+  })
+  it('describes a project health red transition', () => {
+    const event: AutomationEvent = { type: 'project_health_red', projectId: 1, project: { id: 1, name: 'Apollo', score: 42, toRag: 'red' } }
+    expect(describeEvent(event)).toContain('Apollo')
+    expect(describeEvent(event)).toContain('RED')
+    expect(describeEvent(event)).toContain('42')
   })
 })

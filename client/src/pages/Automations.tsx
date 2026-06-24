@@ -26,6 +26,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   task_assigned: 'Task is assigned',
   risk_created: 'Risk is identified',
   risk_updated: 'Risk is updated',
+  project_health_red: 'Project health turns red',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -166,6 +167,7 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
   const [error, setError] = useState('')
 
   const isTaskTrigger = trigger.startsWith('task')
+  const isRiskTrigger = trigger.startsWith('risk')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -175,7 +177,7 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
     if (isTaskTrigger) {
       if (toStatus) conditions.to_status = toStatus
       if (priorityIn.length) conditions.priority_in = priorityIn
-    } else if (minScore) {
+    } else if (isRiskTrigger && minScore) {
       conditions.min_score = Number(minScore)
     }
 
@@ -261,11 +263,13 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
               </div>
             </div>
           </div>
-        ) : (
+        ) : isRiskTrigger ? (
           <div className="w-1/2">
             <label className="block text-xs font-medium text-gray-500 mb-1">Minimum risk score (1–16)</label>
             <input type="number" min={1} max={16} value={minScore} onChange={e => setMinScore(e.target.value)} placeholder="e.g. 6" className={inputCls} />
           </div>
+        ) : (
+          <p className="text-xs text-gray-500">No conditions — this rule fires whenever the project's daily health snapshot crosses into the red band.</p>
         )}
       </div>
 

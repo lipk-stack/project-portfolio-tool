@@ -40,7 +40,9 @@ export function runAutomations(event: AutomationEvent, actorId: number) {
 function executeAction(rule: AutomationRule, event: AutomationEvent, actorId: number) {
   const link = event.type.startsWith('risk')
     ? `/projects/${event.projectId}/risks`
-    : `/projects/${event.projectId}/tasks`
+    : event.type.startsWith('project')
+      ? `/projects/${event.projectId}`
+      : `/projects/${event.projectId}/tasks`
 
   switch (rule.action_type) {
     case 'notify_manager': {

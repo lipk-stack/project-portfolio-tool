@@ -7,6 +7,7 @@ export type TriggerType =
   | 'task_assigned'
   | 'risk_created'
   | 'risk_updated'
+  | 'project_health_red'
 
 export type ActionType = 'notify_manager' | 'notify_user' | 'set_task_priority' | 'add_comment'
 
@@ -45,6 +46,13 @@ export interface AutomationEvent {
     score: number
     status?: string
   }
+  project?: {
+    id: number
+    name: string
+    score: number
+    fromRag?: string
+    toRag: string
+  }
 }
 
 export function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -77,6 +85,10 @@ export function ruleMatches(rule: AutomationRule, event: AutomationEvent): boole
     if (cond.min_score != null && event.risk.score < cond.min_score) return false
   }
 
+  if (event.type.startsWith('project')) {
+    if (!event.project) return false
+  }
+
   return true
 }
 
@@ -92,5 +104,7 @@ export function describeEvent(event: AutomationEvent): string {
       return `Risk "${event.risk?.title}" was identified (score ${event.risk?.score})`
     case 'risk_updated':
       return `Risk "${event.risk?.title}" was updated (score ${event.risk?.score})`
+    case 'project_health_red':
+      return `Project "${event.project?.name}" health turned RED (score ${event.project?.score})`
   }
 }

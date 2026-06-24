@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth'
 
 const router = Router()
 
-const TRIGGER_TYPES = ['task_created', 'task_status_changed', 'task_assigned', 'risk_created', 'risk_updated']
+const TRIGGER_TYPES = ['task_created', 'task_status_changed', 'task_assigned', 'risk_created', 'risk_updated', 'project_health_red']
 const ACTION_TYPES = ['notify_manager', 'notify_user', 'set_task_priority', 'add_comment']
 
 router.get('/', authenticate, (_req: Request, res: Response) => {
