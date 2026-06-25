@@ -7,6 +7,7 @@ import http from 'http'
 import { initializeDatabase } from './database'
 import { initRealtime } from './lib/realtime'
 import { runDailyChecks } from './lib/dailyChecksService'
+import { startDailyScheduler, logDailyResult } from './lib/scheduler'
 
 import authRoutes from './routes/auth'
 import dashboardRoutes from './routes/dashboard'
@@ -41,12 +42,14 @@ initializeDatabase()
 // transitions plus newly overdue tasks and budget overruns. All alerts are
 // suppressed on the very first bootstrap so the synthetic backfill and seeded
 // demo data can't manufacture a flood. See lib/dailyChecksService.ts.
+//
+// startDailyScheduler() then keeps the sweep firing for a long-running server:
+// it re-arms at each UTC midnight so overdue/overrun/health alerts surface
+// without needing a restart. The sweep is idempotent per day, so the bootstrap
+// run and the first scheduled run never double-alert. See lib/scheduler.ts.
 try {
-  const r = runDailyChecks()
-  if (r.redAlerts.length) console.log(`⚠️  Health alerts raised for: ${r.redAlerts.join(', ')}`)
-  if (r.recoveries.length) console.log(`✅ Health recoveries noted for: ${r.recoveries.join(', ')}`)
-  if (r.overdue.length) console.log(`⏰ Overdue tasks flagged: ${r.overdue.join(', ')}`)
-  if (r.overruns.length) console.log(`💸 Budget overruns flagged: ${r.overruns.join(', ')}`)
+  logDailyResult(runDailyChecks())
+  startDailyScheduler()
 } catch (err) {
   console.error('Daily checks bootstrap failed:', err)
 }
