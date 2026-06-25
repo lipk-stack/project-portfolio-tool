@@ -348,6 +348,18 @@ function runMigrations() {
     )
   `)
   db.exec('CREATE INDEX IF NOT EXISTS idx_health_history_project ON health_history(project_id, date)')
+  // Records once-only firings of the daily-sweep alerts (task_overdue,
+  // budget_overrun) so a server restart never re-notifies an already-known
+  // overdue task or budget overrun. (kind, ref_id) is the natural key.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS alert_log (
+      kind TEXT NOT NULL,
+      ref_id INTEGER NOT NULL,
+      fired_on DATE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (kind, ref_id)
+    )
+  `)
   db.exec('CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_webhooks_enabled ON webhooks(enabled)')
   db.exec('CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at)')

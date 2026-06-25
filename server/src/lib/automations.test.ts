@@ -116,6 +116,19 @@ describe('ruleMatches', () => {
   it('treats malformed conditions JSON as unconditional', () => {
     expect(ruleMatches(rule({ conditions: '{broken' }), taskEvent())).toBe(true)
   })
+
+  it('matches a task_overdue rule and honours a priority filter', () => {
+    const r = rule({ trigger_type: 'task_overdue', conditions: JSON.stringify({ priority_in: ['high', 'critical'] }) })
+    expect(ruleMatches(r, taskEvent({ priority: 'high' }, 'task_overdue'))).toBe(true)
+    expect(ruleMatches(r, taskEvent({ priority: 'low' }, 'task_overdue'))).toBe(false)
+  })
+
+  it('matches an unconditional budget_overrun rule and scopes it to a project', () => {
+    const event: AutomationEvent = { type: 'budget_overrun', projectId: 10, budget: { projectId: 10, name: 'Apollo', budget: 100, spent: 130 } }
+    expect(ruleMatches(rule({ trigger_type: 'budget_overrun' }), event)).toBe(true)
+    expect(ruleMatches(rule({ trigger_type: 'budget_overrun', project_id: 10 }), event)).toBe(true)
+    expect(ruleMatches(rule({ trigger_type: 'budget_overrun', project_id: 99 }), event)).toBe(false)
+  })
 })
 
 describe('describeEvent', () => {
@@ -140,5 +153,16 @@ describe('describeEvent', () => {
     expect(describeEvent(event)).toContain('recovered')
     expect(describeEvent(event)).toContain('AMBER')
     expect(describeEvent(event)).toContain('72')
+  })
+  it('describes an overdue task', () => {
+    const event: AutomationEvent = { type: 'task_overdue', projectId: 1, task: { id: 5, name: 'Ship docs' } }
+    expect(describeEvent(event)).toContain('Ship docs')
+    expect(describeEvent(event)).toContain('overdue')
+  })
+  it('describes a budget overrun with the figures', () => {
+    const event: AutomationEvent = { type: 'budget_overrun', projectId: 1, budget: { projectId: 1, name: 'Apollo', budget: 100, spent: 130 } }
+    expect(describeEvent(event)).toContain('Apollo')
+    expect(describeEvent(event)).toContain('130')
+    expect(describeEvent(event)).toContain('100')
   })
 })

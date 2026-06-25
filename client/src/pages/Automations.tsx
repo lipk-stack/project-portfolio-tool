@@ -28,6 +28,8 @@ const TRIGGER_LABELS: Record<string, string> = {
   risk_updated: 'Risk is updated',
   project_health_red: 'Project health turns red',
   project_health_improved: 'Project health recovers',
+  task_overdue: 'Task becomes overdue',
+  budget_overrun: 'Project exceeds its budget',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -169,6 +171,7 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
 
   const isTaskTrigger = trigger.startsWith('task')
   const isRiskTrigger = trigger.startsWith('risk')
+  const isOverdueTrigger = trigger === 'task_overdue'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -241,13 +244,15 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
         <div className="text-xs font-semibold text-gray-500 uppercase">Conditions (optional)</div>
         {isTaskTrigger ? (
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Status becomes</label>
-              <select value={toStatus} onChange={e => setToStatus(e.target.value)} className={inputCls}>
-                <option value="">Any</option>
-                {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-              </select>
-            </div>
+            {!isOverdueTrigger && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Status becomes</label>
+                <select value={toStatus} onChange={e => setToStatus(e.target.value)} className={inputCls}>
+                  <option value="">Any</option>
+                  {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Priority is one of</label>
               <div className="flex gap-2 flex-wrap pt-1.5">
@@ -271,7 +276,13 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
           </div>
         ) : (
           <p className="text-xs text-gray-500">
-            No conditions — this rule fires whenever the project's daily health snapshot {trigger === 'project_health_improved' ? 'climbs back out of the red band' : 'crosses into the red band'}.
+            No conditions — this rule fires once, on the daily check, when {
+              trigger === 'budget_overrun'
+                ? "a project's spend first exceeds its budget"
+                : trigger === 'project_health_improved'
+                  ? "the project's daily health snapshot climbs back out of the red band"
+                  : "the project's daily health snapshot crosses into the red band"
+            }.
           </p>
         )}
       </div>

@@ -4,9 +4,9 @@ import cors from 'cors'
 import helmet from 'helmet'
 import path from 'path'
 import http from 'http'
-import { initializeDatabase, db } from './database'
+import { initializeDatabase } from './database'
 import { initRealtime } from './lib/realtime'
-import { recordDailySnapshots, backfillDemoHistory, notifyRedTransitions, notifyHealthRecoveries } from './lib/healthService'
+import { runDailyChecks } from './lib/dailyChecksService'
 
 import authRoutes from './routes/auth'
 import dashboardRoutes from './routes/dashboard'
@@ -36,26 +36,19 @@ import insightsRoutes from './routes/insights'
 
 initializeDatabase()
 
-// Health-score history bootstrap: seed a one-time synthetic trend on a fresh
-// database so the sparklines aren't blank, then record today's real snapshot.
-// recordDailySnapshots is idempotent per (project, date), so restarting the
-// server simply refreshes today's point as the underlying data changes.
+// Daily-sweep bootstrap: records today's health snapshot (seeding a synthetic
+// trend on a fresh DB) and raises the day-over-day alerts — health red/recovery
+// transitions plus newly overdue tasks and budget overruns. All alerts are
+// suppressed on the very first bootstrap so the synthetic backfill and seeded
+// demo data can't manufacture a flood. See lib/dailyChecksService.ts.
 try {
-  const hist = db.prepare('SELECT COUNT(*) as c FROM health_history').get() as { c: number }
-  const proj = db.prepare("SELECT COUNT(*) as c FROM projects WHERE status NOT IN ('cancelled')").get() as { c: number }
-  const freshHistory = hist.c === 0 && proj.c > 0
-  if (freshHistory) backfillDemoHistory()
-  recordDailySnapshots()
-  // Only raise red-transition alerts on real day-over-day data — never on the
-  // very first bootstrap (the synthetic backfill would spam manufactured drops).
-  if (!freshHistory) {
-    const alerted = notifyRedTransitions()
-    if (alerted.length) console.log(`⚠️  Health alerts raised for: ${alerted.join(', ')}`)
-    const recovered = notifyHealthRecoveries()
-    if (recovered.length) console.log(`✅ Health recoveries noted for: ${recovered.join(', ')}`)
-  }
+  const r = runDailyChecks()
+  if (r.redAlerts.length) console.log(`⚠️  Health alerts raised for: ${r.redAlerts.join(', ')}`)
+  if (r.recoveries.length) console.log(`✅ Health recoveries noted for: ${r.recoveries.join(', ')}`)
+  if (r.overdue.length) console.log(`⏰ Overdue tasks flagged: ${r.overdue.join(', ')}`)
+  if (r.overruns.length) console.log(`💸 Budget overruns flagged: ${r.overruns.join(', ')}`)
 } catch (err) {
-  console.error('Health snapshot bootstrap failed:', err)
+  console.error('Daily checks bootstrap failed:', err)
 }
 
 const app = express()

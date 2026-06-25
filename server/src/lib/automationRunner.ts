@@ -40,7 +40,7 @@ export function runAutomations(event: AutomationEvent, actorId: number) {
 function executeAction(rule: AutomationRule, event: AutomationEvent, actorId: number) {
   const link = event.type.startsWith('risk')
     ? `/projects/${event.projectId}/risks`
-    : event.type.startsWith('project')
+    : event.type.startsWith('project') || event.type === 'budget_overrun'
       ? `/projects/${event.projectId}`
       : `/projects/${event.projectId}/tasks`
 

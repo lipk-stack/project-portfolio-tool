@@ -9,6 +9,8 @@ export type TriggerType =
   | 'risk_updated'
   | 'project_health_red'
   | 'project_health_improved'
+  | 'task_overdue'
+  | 'budget_overrun'
 
 export type ActionType = 'notify_manager' | 'notify_user' | 'set_task_priority' | 'add_comment'
 
@@ -53,6 +55,12 @@ export interface AutomationEvent {
     score: number
     fromRag?: string
     toRag: string
+  }
+  budget?: {
+    projectId: number
+    name: string
+    budget: number
+    spent: number
   }
 }
 
@@ -109,5 +117,9 @@ export function describeEvent(event: AutomationEvent): string {
       return `Project "${event.project?.name}" health turned RED (score ${event.project?.score})`
     case 'project_health_improved':
       return `Project "${event.project?.name}" health recovered to ${event.project?.toRag?.toUpperCase()} (score ${event.project?.score})`
+    case 'task_overdue':
+      return `Task "${event.task?.name}" is overdue`
+    case 'budget_overrun':
+      return `Project "${event.budget?.name}" exceeded its budget ($${event.budget?.spent} spent of $${event.budget?.budget})`
   }
 }
