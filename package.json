@@ -19,7 +19,7 @@
     "prestart": "node scripts/assemble.mjs",
     "start": "cross-env NODE_ENV=production node server/dist/index.js",
     "serve": "npm run build && npm run start",
-    "test": "npm run test --workspace=server"
+    "test": "npm run test --workspace=server && npm run test --workspace=client"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
