@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'http'
 import { Server, Socket } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import { JwtPayload } from '../types'
+import { JWT_SECRET } from '../config/constants'
 
 let io: Server | null = null
 
@@ -18,7 +19,7 @@ export function initRealtime(httpServer: HttpServer) {
     const token = socket.handshake.auth?.token
     if (!token) return next(new Error('Authentication required'))
     try {
-      socket.data.user = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret') as JwtPayload
+      socket.data.user = jwt.verify(token, JWT_SECRET) as JwtPayload
       next()
     } catch {
       next(new Error('Invalid token'))

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 import bcrypt from 'bcryptjs'
+import { BCRYPT_ROUNDS } from './config/constants'
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/portia.db')
 const dbDir = path.dirname(dbPath)
@@ -322,19 +323,8 @@ function runMigrations() {
     )
   `)
   addColumn('webhooks', 'format', "TEXT DEFAULT 'json'") // table exists by now; upgrades It.5 DBs
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS attachments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
-      filename TEXT NOT NULL,
-      mime TEXT,
-      size INTEGER DEFAULT 0,
-      storage_path TEXT NOT NULL,
-      uploaded_by INTEGER REFERENCES users(id),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
+  // NOTE: `attachments` is created in the canonical schema block above (which
+  // runs before runMigrations), so it is intentionally NOT redefined here.
   db.exec(`
     CREATE TABLE IF NOT EXISTS health_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,7 +367,7 @@ function seedDatabase() {
   const existing = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }
   if (existing.count > 0) return
 
-  const passwordHash = bcrypt.hashSync('demo123', 10)
+  const passwordHash = bcrypt.hashSync('demo123', BCRYPT_ROUNDS)
 
   const insertUser = db.prepare(`
     INSERT INTO users (email, password_hash, name, role, department, capacity, hourly_rate)
@@ -387,7 +377,7 @@ function seedDatabase() {
   const users = db.transaction(() => {
     const ids: number[] = []
     const data = [
-      ['admin@demo.com', bcrypt.hashSync('admin123', 10), 'Sarah Chen', 'admin', 'Executive', 40, 150],
+      ['admin@demo.com', bcrypt.hashSync('admin123', BCRYPT_ROUNDS), 'Sarah Chen', 'admin', 'Executive', 40, 150],
       ['john.manager@demo.com', passwordHash, 'John Martinez', 'manager', 'Engineering', 40, 120],
       ['lisa.pm@demo.com', passwordHash, 'Lisa Thompson', 'manager', 'Product', 40, 115],
       ['alex.dev@demo.com', passwordHash, 'Alex Rivera', 'member', 'Engineering', 40, 95],

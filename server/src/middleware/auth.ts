@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { JwtPayload } from '../types'
 import { db } from '../database'
 import { hashToken, isApiToken } from '../lib/tokens'
+import { JWT_SECRET } from '../config/constants'
 
 declare global {
   namespace Express {
@@ -33,7 +34,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret') as JwtPayload
+    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload
     req.user = payload
     next()
   } catch {

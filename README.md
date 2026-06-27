@@ -122,6 +122,11 @@ portia/
 └── Dockerfile
 ```
 
+For a full tour of the design — the pure-logic/service split, subsystems
+(auth, automation engine, daily sweep, health scoring, importers), the data
+layer, and conventions — see **[ARCHITECTURE.md](./ARCHITECTURE.md)**. To set up
+a dev environment and learn the workflow, see **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
+
 ## API Surface
 
 The backend exposes a comprehensive REST API. Highlights:
@@ -154,11 +159,18 @@ The backend exposes a comprehensive REST API. Highlights:
 - **WebSockets (socket.io):** notifications are pushed instantly to the bell dropdown, and task changes made by teammates refresh open project pages live. The socket handshake reuses the JWT.
 - **Email notifications:** set the `SMTP_*` variables in `.env` to deliver every in-app notification by email too (silently disabled when unconfigured; users can opt out in Settings).
 
-## Testing
+## Testing & Quality Gates
 
 ```bash
-npm test   # Vitest unit tests (agile math, automations, scenarios, webhooks)
+npm run lint    # ESLint over server/src + client/src (0 errors required)
+npm run build   # tsc type-check + bundle, both workspaces
+npm test        # Vitest — server (agile math, automations, scenarios, health, scheduler …) + client (UI components)
+npm run check   # all three, in order — the full "definition of done"
 ```
+
+CI (`.github/workflows/ci.yml`) runs `lint → build → test` on every push to
+`main` and every pull request. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the
+contributor workflow.
 
 ## Comparison with Industry Leaders
 

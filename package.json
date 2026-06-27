@@ -19,10 +19,22 @@
     "prestart": "node scripts/assemble.mjs",
     "start": "cross-env NODE_ENV=production node server/dist/index.js",
     "serve": "npm run build && npm run start",
-    "test": "npm run test --workspace=server && npm run test --workspace=client"
+    "lint": "eslint server/src client/src",
+    "lint:fix": "eslint server/src client/src --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspace=server && npm run test --workspace=client",
+    "check": "npm run lint && npm run build && npm test"
   },
   "devDependencies": {
+    "@eslint/js": "^9.17.0",
     "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript-eslint": "^8.18.2"
   }
 }

@@ -12,8 +12,9 @@ export function sanitizeFilename(name: string): string {
     .replace(/\\/g, '/') // normalise Windows separators
     .split('/').pop() || '' // drop any path, keep the basename
   const cleaned = base
+    // eslint-disable-next-line no-control-regex -- deliberately strip control chars
     .replace(/[\x00-\x1f]/g, '') // control chars
-    .replace(/[^A-Za-z0-9._ ()\-]/g, '_') // keep a friendly whitelist
+    .replace(/[^A-Za-z0-9._ ()-]/g, '_') // keep a friendly whitelist
     .replace(/\s+/g, ' ')
     .replace(/^\.+/, '') // no leading dots (hidden / traversal)
     .trim()

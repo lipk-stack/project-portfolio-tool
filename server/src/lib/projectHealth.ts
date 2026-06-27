@@ -125,7 +125,7 @@ export function computeProjectHealth(input: ProjectHealthInput): ProjectHealthRe
   const openRisks = Math.max(0, input.openRiskCount ?? 0)
   const criticalRisks = Math.max(0, input.criticalRiskCount ?? 0)
   // Each critical risk bites hard; ordinary open risks contribute mildly.
-  let riskPenalty = clampPenalty(criticalRisks * (CAP.risk * 0.45) + Math.max(0, openRisks - criticalRisks) * (CAP.risk * 0.08), CAP.risk)
+  const riskPenalty = clampPenalty(criticalRisks * (CAP.risk * 0.45) + Math.max(0, openRisks - criticalRisks) * (CAP.risk * 0.08), CAP.risk)
   const riskRag: Rag = riskPenalty <= CAP.risk * 0.15 ? 'green' : riskPenalty <= CAP.risk * 0.5 ? 'amber' : 'red'
   let riskDetail: string
   if (criticalRisks > 0) riskDetail = `${criticalRisks} critical risk${criticalRisks === 1 ? '' : 's'} open${openRisks > criticalRisks ? ` (${openRisks} open total)` : ''}.`

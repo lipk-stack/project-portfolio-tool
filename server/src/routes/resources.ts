@@ -33,7 +33,9 @@ router.get('/', authenticate, (_req: Request, res: Response) => {
   const enriched = (resources as Array<Record<string, unknown>>).map(r => ({
     ...r,
     projects: assignmentMap[r.id as number] || [],
-    utilization_percent: Math.min(Math.round(((r.total_allocation as number) / 100) * 100), 200),
+    // total_allocation is already a percentage; cap the displayed figure at 200%
+    // so a wildly over-allocated resource doesn't blow out the UI.
+    utilization_percent: Math.min(Math.round(r.total_allocation as number), 200),
   }))
 
   res.json({ resources: enriched })
