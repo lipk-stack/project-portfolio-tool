@@ -35,3 +35,22 @@ export interface BudgetRow {
 export function detectBudgetOverruns(projects: BudgetRow[]): BudgetRow[] {
   return projects.filter((p) => p.budget > 0 && p.spent > p.budget)
 }
+
+export interface MilestoneRow {
+  id: number
+  name: string
+  project_id: number
+  date: string // YYYY-MM-DD
+  status: string
+}
+
+// Milestones whose target date has passed without being achieved. Mirrors
+// detectOverdueTasks: a milestone due today is NOT missed (only strictly-earlier
+// dates count), and any 'achieved' milestone is excluded regardless of date.
+// ISO dates compare correctly lexicographically.
+export function detectMissedMilestones(milestones: MilestoneRow[], today: string): MilestoneRow[] {
+  return milestones.filter((m) => {
+    if (m.status === 'achieved' || !m.date) return false
+    return m.date.slice(0, 10) < today
+  })
+}

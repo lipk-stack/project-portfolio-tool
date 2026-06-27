@@ -129,6 +129,18 @@ describe('ruleMatches', () => {
     expect(ruleMatches(rule({ trigger_type: 'budget_overrun', project_id: 10 }), event)).toBe(true)
     expect(ruleMatches(rule({ trigger_type: 'budget_overrun', project_id: 99 }), event)).toBe(false)
   })
+
+  it('matches an unconditional milestone_missed rule and scopes it to a project', () => {
+    const event: AutomationEvent = { type: 'milestone_missed', projectId: 10, milestone: { id: 3, name: 'Go Live', date: '2026-01-01', projectId: 10 } }
+    expect(ruleMatches(rule({ trigger_type: 'milestone_missed' }), event)).toBe(true)
+    expect(ruleMatches(rule({ trigger_type: 'milestone_missed', project_id: 10 }), event)).toBe(true)
+    expect(ruleMatches(rule({ trigger_type: 'milestone_missed', project_id: 99 }), event)).toBe(false)
+  })
+
+  it('does not match a milestone_missed rule when the milestone payload is absent', () => {
+    const event = { type: 'milestone_missed', projectId: 10 } as AutomationEvent
+    expect(ruleMatches(rule({ trigger_type: 'milestone_missed' }), event)).toBe(false)
+  })
 })
 
 describe('describeEvent', () => {
@@ -164,5 +176,10 @@ describe('describeEvent', () => {
     expect(describeEvent(event)).toContain('Apollo')
     expect(describeEvent(event)).toContain('130')
     expect(describeEvent(event)).toContain('100')
+  })
+  it('describes a missed milestone with its target date', () => {
+    const event: AutomationEvent = { type: 'milestone_missed', projectId: 1, milestone: { id: 3, name: 'Go Live', date: '2026-01-01', projectId: 1 } }
+    expect(describeEvent(event)).toContain('Go Live')
+    expect(describeEvent(event)).toContain('2026-01-01')
   })
 })

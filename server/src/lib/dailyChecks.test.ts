@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { detectOverdueTasks, detectBudgetOverruns, OverdueTaskRow, BudgetRow } from './dailyChecks'
+import {
+  detectOverdueTasks,
+  detectBudgetOverruns,
+  detectMissedMilestones,
+  OverdueTaskRow,
+  BudgetRow,
+  MilestoneRow,
+} from './dailyChecks'
 
 describe('detectOverdueTasks', () => {
   const today = '2026-06-25'
@@ -47,5 +54,32 @@ describe('detectBudgetOverruns', () => {
 
   it('skips projects with no budget set', () => {
     expect(detectBudgetOverruns([projects[3]])).toEqual([])
+  })
+})
+
+describe('detectMissedMilestones', () => {
+  const today = '2026-06-25'
+  const milestones: MilestoneRow[] = [
+    { id: 1, name: 'Past, upcoming', project_id: 1, date: '2026-06-20', status: 'upcoming' },
+    { id: 2, name: 'Past, achieved', project_id: 1, date: '2026-06-20', status: 'achieved' },
+    { id: 3, name: 'Due today', project_id: 1, date: '2026-06-25', status: 'upcoming' },
+    { id: 4, name: 'Future', project_id: 1, date: '2026-07-10', status: 'upcoming' },
+  ]
+
+  it('flags only unachieved milestones whose date is strictly in the past', () => {
+    expect(detectMissedMilestones(milestones, today).map((m) => m.id)).toEqual([1])
+  })
+
+  it('does not flag a milestone due today', () => {
+    expect(detectMissedMilestones([milestones[2]], today)).toEqual([])
+  })
+
+  it('never flags an achieved milestone regardless of date', () => {
+    expect(detectMissedMilestones([milestones[1]], today)).toEqual([])
+  })
+
+  it('ignores a time component on the milestone date', () => {
+    const m: MilestoneRow[] = [{ id: 9, name: 'X', project_id: 1, date: '2026-06-24T23:59:00', status: 'upcoming' }]
+    expect(detectMissedMilestones(m, today).map((x) => x.id)).toEqual([9])
   })
 })

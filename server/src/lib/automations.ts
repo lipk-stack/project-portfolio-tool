@@ -11,6 +11,7 @@ export type TriggerType =
   | 'project_health_improved'
   | 'task_overdue'
   | 'budget_overrun'
+  | 'milestone_missed'
 
 export type ActionType = 'notify_manager' | 'notify_user' | 'set_task_priority' | 'add_comment'
 
@@ -62,6 +63,12 @@ export interface AutomationEvent {
     budget: number
     spent: number
   }
+  milestone?: {
+    id: number
+    name: string
+    date: string
+    projectId: number
+  }
 }
 
 export function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -98,6 +105,10 @@ export function ruleMatches(rule: AutomationRule, event: AutomationEvent): boole
     if (!event.project) return false
   }
 
+  if (event.type === 'milestone_missed') {
+    if (!event.milestone) return false
+  }
+
   return true
 }
 
@@ -121,5 +132,7 @@ export function describeEvent(event: AutomationEvent): string {
       return `Task "${event.task?.name}" is overdue`
     case 'budget_overrun':
       return `Project "${event.budget?.name}" exceeded its budget ($${event.budget?.spent} spent of $${event.budget?.budget})`
+    case 'milestone_missed':
+      return `Milestone "${event.milestone?.name}" was missed (target ${event.milestone?.date})`
   }
 }

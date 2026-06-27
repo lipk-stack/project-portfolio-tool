@@ -23,7 +23,8 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Budget Tracking** | Planned vs actual by category, spend rate, EVM-style charts |
 | **Cash Flow** | Time-phased budget: monthly planned vs actual spend with cumulative curves |
 | **Risk Register** | Probability/impact matrix, severity scoring, mitigation plans |
-| **Automations** | No-code rules engine: when task/risk events occur (with conditions), notify people, set priority, or add comments |
+| **Automations** | No-code rules engine: when task/risk events occur, project health turns red/recovers, a task goes overdue, a budget overruns, or a **milestone is missed** (with conditions), notify people, set priority, or add comments |
+| **Proactive Daily Alerts** | A daily sweep raises once-only notifications for overdue tasks, budget overruns, project-health red/recovery transitions, and **missed milestones** (target date passed without being achieved) — delivered to assignee, project manager and admins |
 | **Saved Views** | Save named filter combinations on the Projects page, with one-click recall |
 | **CSV Bulk Import** | Bulk-import **tasks and risks** from Excel / MS Project / Jira / Asana exports; smart header mapping, per-row validation, dry-run preview, and downloadable CSV templates — only error-free rows are committed |
 | **GitHub Issue Import** | Pull issues directly from any GitHub repository (or **GitHub Enterprise Server**) into tasks; issue state → status (closed → done), labels → priority, pull requests skipped, optional token & label filters, dry-run preview before commit |

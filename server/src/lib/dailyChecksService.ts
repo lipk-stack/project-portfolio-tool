@@ -12,7 +12,7 @@
 import { db } from '../database'
 import { createNotification } from './notify'
 import { runAutomations } from './automationRunner'
-import { detectOverdueTasks, detectBudgetOverruns, OverdueTaskRow, BudgetRow } from './dailyChecks'
+import { detectOverdueTasks, detectBudgetOverruns, detectMissedMilestones, OverdueTaskRow, BudgetRow, MilestoneRow } from './dailyChecks'
 import { recordDailySnapshots, backfillDemoHistory, notifyRedTransitions, notifyHealthRecoveries } from './healthService'
 
 // System actor id for automation events not triggered by a logged-in user.
@@ -56,6 +56,16 @@ function budgetedProjects(): BudgetRow[] {
   return db.prepare(`
     SELECT id, name, budget, spent FROM projects WHERE status NOT IN ('cancelled')
   `).all() as BudgetRow[]
+}
+
+// Milestones with a target date, scoped to live projects — the pure detector
+// then keeps only the ones that slipped past their date without being achieved.
+function candidateMilestones(): MilestoneRow[] {
+  return db.prepare(`
+    SELECT m.id, m.name, m.project_id, m.date, m.status
+    FROM milestones m JOIN projects p ON p.id = m.project_id
+    WHERE p.status NOT IN ('cancelled') AND m.status != 'achieved' AND m.date IS NOT NULL
+  `).all() as MilestoneRow[]
 }
 
 // Notifies the assignee, project manager and admins the first time a task slips
@@ -134,12 +144,51 @@ export function notifyBudgetOverruns(baseline = false): string[] {
   return fired
 }
 
+// The milestone mirror of notifyOverdueTasks: notifies the project manager and
+// admins the first time a milestone slips past its target date without being
+// achieved, and fires any `milestone_missed` automation rule. `baseline` mode
+// records markers silently so a fresh demo DB (which already has past-due
+// milestones) isn't alerted en masse — only milestones that slip LATER notify.
+export function notifyMissedMilestones(baseline = false): string[] {
+  const missed = detectMissedMilestones(candidateMilestones(), today())
+  if (missed.length === 0) return []
+  const admins = adminIds()
+  const fired: string[] = []
+
+  for (const m of missed) {
+    if (wasFired('milestone_missed', m.id)) continue
+    markFired('milestone_missed', m.id)
+    if (baseline) continue
+
+    const recipients = new Set<number>(admins)
+    const mgr = projectManagerId(m.project_id)
+    if (mgr) recipients.add(mgr)
+
+    const link = `/projects/${m.project_id}`
+    const title = `Milestone missed: ${m.name}`
+    const message = `Milestone "${m.name}" passed its target date (${m.date}) without being achieved.`
+    for (const userId of recipients) createNotification(userId, 'milestone_missed', title, message, link)
+
+    runAutomations(
+      {
+        type: 'milestone_missed',
+        projectId: m.project_id,
+        milestone: { id: m.id, name: m.name, date: m.date, projectId: m.project_id },
+      },
+      SYSTEM_ACTOR_ID
+    )
+    fired.push(m.name)
+  }
+  return fired
+}
+
 export interface DailyChecksResult {
   freshHistory: boolean
   redAlerts: string[]
   recoveries: string[]
   overdue: string[]
   overruns: string[]
+  missedMilestones: string[]
 }
 
 // The single entry point the bootstrap calls. On a fresh database (no health
@@ -159,7 +208,8 @@ export function runDailyChecks(): DailyChecksResult {
   if (freshHistory) {
     notifyOverdueTasks(true) // seed alert_log baselines silently
     notifyBudgetOverruns(true)
-    return { freshHistory, redAlerts: [], recoveries: [], overdue: [], overruns: [] }
+    notifyMissedMilestones(true)
+    return { freshHistory, redAlerts: [], recoveries: [], overdue: [], overruns: [], missedMilestones: [] }
   }
 
   return {
@@ -168,5 +218,6 @@ export function runDailyChecks(): DailyChecksResult {
     recoveries: notifyHealthRecoveries(),
     overdue: notifyOverdueTasks(),
     overruns: notifyBudgetOverruns(),
+    missedMilestones: notifyMissedMilestones(),
   }
 }

@@ -30,6 +30,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   project_health_improved: 'Project health recovers',
   task_overdue: 'Task becomes overdue',
   budget_overrun: 'Project exceeds its budget',
+  milestone_missed: 'Milestone is missed',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -279,9 +280,11 @@ function RuleForm({ projects, users, onDone, onCancel }: { projects: Project[]; 
             No conditions — this rule fires once, on the daily check, when {
               trigger === 'budget_overrun'
                 ? "a project's spend first exceeds its budget"
-                : trigger === 'project_health_improved'
-                  ? "the project's daily health snapshot climbs back out of the red band"
-                  : "the project's daily health snapshot crosses into the red band"
+                : trigger === 'milestone_missed'
+                  ? 'a milestone slips past its target date without being achieved'
+                  : trigger === 'project_health_improved'
+                    ? "the project's daily health snapshot climbs back out of the red band"
+                    : "the project's daily health snapshot crosses into the red band"
             }.
           </p>
         )}

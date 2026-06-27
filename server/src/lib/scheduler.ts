@@ -30,6 +30,7 @@ export function logDailyResult(r: DailyChecksResult): void {
   if (r.recoveries.length) console.log(`✅ Health recoveries noted for: ${r.recoveries.join(', ')}`)
   if (r.overdue.length) console.log(`⏰ Overdue tasks flagged: ${r.overdue.join(', ')}`)
   if (r.overruns.length) console.log(`💸 Budget overruns flagged: ${r.overruns.join(', ')}`)
+  if (r.missedMilestones.length) console.log(`🚩 Milestones missed: ${r.missedMilestones.join(', ')}`)
 }
 
 let timer: ReturnType<typeof setTimeout> | null = null
