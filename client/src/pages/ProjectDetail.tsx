@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload, Github, Ticket } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, BarChart2, Calendar, Users, DollarSign, AlertTriangle, GitBranch, List, Kanban, CheckCircle, TrendingUp, Download, FileText, FlaskConical, SlidersHorizontal, Upload, Github, Ticket, Clock } from 'lucide-react'
 import { projectsApi, tasksApi, risksApi, budgetApi, exportApi, reportsApi, insightsApi } from '../api'
 import { getSocket } from '../realtime'
 import { useAuthStore } from '../store'
@@ -16,13 +16,14 @@ import { HealthBadge, PriorityBadge, StatusBadge } from '../components/ui/Badge'
 import Progress from '../components/ui/Progress'
 import Modal from '../components/ui/Modal'
 import GanttChart from '../components/gantt/GanttChart'
+import CriticalPathPanel from '../components/CriticalPathPanel'
 import KanbanBoard from '../components/kanban/KanbanBoard'
 import TaskForm from '../components/forms/TaskForm'
 import Avatar from '../components/ui/Avatar'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 
-type Tab = 'overview' | 'tasks' | 'gantt' | 'budget' | 'risks' | 'team' | 'evm' | 'scenario'
+type Tab = 'overview' | 'tasks' | 'gantt' | 'schedule' | 'budget' | 'risks' | 'team' | 'evm' | 'scenario'
 
 function formatCurrency(n: number): string {
   if (n >= 1000000) return `$${(n / 1000000).toFixed(2)}M`
@@ -155,6 +156,7 @@ export default function ProjectDetail() {
     { id: 'overview' as Tab, label: 'Overview', icon: BarChart2 },
     { id: 'tasks' as Tab, label: 'Tasks', icon: List },
     { id: 'gantt' as Tab, label: 'Gantt', icon: GitBranch },
+    { id: 'schedule' as Tab, label: 'Critical Path', icon: Clock },
     { id: 'evm' as Tab, label: 'EVM', icon: TrendingUp },
     { id: 'scenario' as Tab, label: 'Scenario', icon: FlaskConical },
     { id: 'budget' as Tab, label: 'Budget', icon: DollarSign },
@@ -469,6 +471,10 @@ export default function ProjectDetail() {
             projectEnd={project.end_date}
           />
         </div>
+      )}
+
+      {activeTab === 'schedule' && (
+        <CriticalPathPanel projectId={project.id} />
       )}
 
       {activeTab === 'evm' && (

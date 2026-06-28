@@ -9,6 +9,7 @@ A full-featured, production-ready project portfolio management tool with Gantt c
 | **Portfolio Dashboard** | KPI cards, portfolio EVM strip (CPI/SPI/EV/PV/AC), health scorecard, upcoming milestones, activity feed |
 | **EVM Analytics** | PMBOK-standard Earned Value: BAC/EV/PV/AC, CV/SV, CPI/SPI, EAC/ETC/VAC/TCPI, S-curve chart, schedule slip forecast, executive narrative |
 | **Earned Schedule** | Time-based schedule analytics: ES, SPI(t), time variance, forecast completion date — stays meaningful late in the project where classic SPI converges to 1 |
+| **Critical Path Method** | True CPM scheduling engine: forward/backward pass over the typed dependency network (FS/SS/FF/SF + lag), early/late dates, total & free float, forecast finish date, and a computed critical chain. The critical flag is *derived* from float (not hand-set), so the Gantt, reports and calendar all reflect the real critical path |
 | **My Work** | Cross-project list of your open tasks grouped by urgency (overdue / today / this week), with one-click status updates |
 | **Baseline Tracking** | Capture project & task baselines (start/end/budget/hours), variance visualization on Gantt bars (slipped baselines turn red) |
 | **Gantt Chart** | Interactive SVG, day/week/month zoom, dependency arrows, critical path highlighting, today line, baseline overlay |

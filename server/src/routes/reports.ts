@@ -111,14 +111,4 @@ router.get('/resource-utilization', authenticate, (_req: Request, res: Response)
   res.json({ weekly, byDepartment })
 })
 
-router.get('/critical-path/:projectId', authenticate, (req: Request, res: Response) => {
-  const tasks = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND is_critical = 1 ORDER BY start_date ASC').all(req.params.projectId)
-  const deps = db.prepare(`
-    SELECT td.* FROM task_dependencies td
-    JOIN tasks t ON t.id = td.predecessor_id
-    WHERE t.project_id = ? AND t.is_critical = 1
-  `).all(req.params.projectId)
-  res.json({ tasks, dependencies: deps })
-})
-
 export default router

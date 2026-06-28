@@ -7,6 +7,7 @@ import { createNotification } from '../lib/notify'
 import { emitToProject } from '../lib/realtime'
 import { dispatchWebhooks } from '../lib/webhookDispatcher'
 import { computeNextOccurrence, isValidRecurrence } from '../lib/recurrence'
+import { computeCriticalPath, durationInDays, DependencyType } from '../lib/criticalPath'
 import { buildTaskImport, ImportUser, TASK_IMPORT_TEMPLATE, TaskImportResult } from '../lib/csvImport'
 import { parseGithubRepo, githubIssuesToCsv, countImportableIssues, GithubIssue } from '../lib/githubImport'
 import { parseJiraBaseUrl, jiraIssuesToCsv, countImportableJira, JiraIssue } from '../lib/jiraImport'
@@ -162,6 +163,100 @@ router.get('/project/:projectId', authenticate, (req: Request, res: Response) =>
   }))
 
   res.json({ tasks: tasksWithDeps, dependencies })
+})
+
+// Critical Path Method analysis for a project: runs a forward/backward pass over
+// the task network (durations from planned dates, typed dependencies + lag) and
+// returns early/late dates, total & free float, and the critical path. The
+// engine works in day offsets; we anchor those to the earliest planned start to
+// hand the client real dates. We also refresh each task's `is_critical` flag so
+// the rest of the app (Gantt highlighting, status reports, calendar) reflects
+// the computed critical path rather than a hand-set value — a derived cache, not
+// user data, so recomputing it on read is safe and idempotent.
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+function addDays(anchorMs: number, days: number): string {
+  return new Date(anchorMs + Math.round(days) * MS_PER_DAY).toISOString().slice(0, 10)
+}
+
+router.get('/project/:projectId/critical-path', authenticate, (req: Request, res: Response) => {
+  const rows = db
+    .prepare(
+      `SELECT t.id, t.name, t.start_date, t.end_date, t.estimated_hours, t.status,
+        t.completion_percent, t.is_critical, u.name as assignee_name
+       FROM tasks t LEFT JOIN users u ON u.id = t.assignee_id
+       WHERE t.project_id = ? ORDER BY t.start_date ASC, t.position ASC`,
+    )
+    .all(req.params.projectId) as Array<{
+    id: number
+    name: string
+    start_date: string | null
+    end_date: string | null
+    estimated_hours: number | null
+    status: string
+    completion_percent: number
+    is_critical: number
+    assignee_name: string | null
+  }>
+
+  const links = db
+    .prepare(
+      `SELECT td.predecessor_id, td.successor_id, td.type, td.lag
+       FROM task_dependencies td JOIN tasks t ON t.id = td.predecessor_id
+       WHERE t.project_id = ?`,
+    )
+    .all(req.params.projectId) as Array<{ predecessor_id: number; successor_id: number; type: DependencyType; lag: number }>
+
+  const cpm = computeCriticalPath(
+    rows.map((r) => ({ id: r.id, duration: durationInDays(r.start_date, r.end_date, r.estimated_hours) })),
+    links,
+  )
+  const scheduleById = new Map(cpm.activities.map((a) => [a.id, a]))
+
+  // Anchor day offsets to the earliest planned start so the client gets dates.
+  const anchorMs = rows
+    .map((r) => (r.start_date ? Date.parse(r.start_date) : NaN))
+    .filter((n) => !Number.isNaN(n))
+    .reduce((min, n) => Math.min(min, n), Infinity)
+  const haveAnchor = Number.isFinite(anchorMs)
+
+  const tasks = rows.map((r) => {
+    const s = scheduleById.get(r.id)!
+    return {
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      completion_percent: r.completion_percent,
+      assignee_name: r.assignee_name,
+      duration: s.duration,
+      totalFloat: s.totalFloat,
+      freeFloat: s.freeFloat,
+      isCritical: s.isCritical,
+      earlyStart: haveAnchor ? addDays(anchorMs, s.earlyStart) : null,
+      earlyFinish: haveAnchor ? addDays(anchorMs, s.earlyFinish) : null,
+      lateStart: haveAnchor ? addDays(anchorMs, s.lateStart) : null,
+      lateFinish: haveAnchor ? addDays(anchorMs, s.lateFinish) : null,
+    }
+  })
+
+  // Refresh the persisted is_critical flag for any task whose computed status
+  // differs (keeps Gantt/reports/calendar consistent with the analysis).
+  const changed = rows.filter((r) => (scheduleById.get(r.id)!.isCritical ? 1 : 0) !== r.is_critical)
+  if (changed.length) {
+    const update = db.prepare('UPDATE tasks SET is_critical = ? WHERE id = ?')
+    db.transaction(() => {
+      for (const r of changed) update.run(scheduleById.get(r.id)!.isCritical ? 1 : 0, r.id)
+    })()
+  }
+
+  const nameById = new Map(rows.map((r) => [r.id, r.name]))
+  res.json({
+    projectDuration: cpm.projectDuration,
+    hasCycle: cpm.hasCycle,
+    forecastFinish: haveAnchor ? addDays(anchorMs, cpm.projectDuration) : null,
+    criticalCount: cpm.criticalPath.length,
+    criticalPath: cpm.criticalPath.map((id) => ({ id, name: nameById.get(id)! })),
+    tasks,
+  })
 })
 
 // Downloadable CSV template for the task importer.

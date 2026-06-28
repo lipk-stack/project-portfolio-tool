@@ -78,6 +78,7 @@ export const tasksApi = {
   delete: (id: number) => api.delete(`/tasks/${id}`),
   addDependency: (id: number, data: object) => api.post(`/tasks/${id}/dependencies`, data),
   removeDependency: (id: number, predecessorId: number) => api.delete(`/tasks/${id}/dependencies/${predecessorId}`),
+  criticalPath: (projectId: number) => api.get(`/tasks/project/${projectId}/critical-path`),
   logTime: (id: number, data: object) => api.post(`/tasks/${id}/time`, data),
   myWork: () => api.get('/tasks/my-work'),
   updateStatus: (id: number, status: string) => api.patch(`/tasks/${id}/status`, { status }),
@@ -134,7 +135,6 @@ export const budgetApi = {
 export const reportsApi = {
   overview: () => api.get('/reports/overview'),
   resourceUtilization: () => api.get('/reports/resource-utilization'),
-  criticalPath: (projectId: number) => api.get(`/reports/critical-path/${projectId}`),
   statusPdfUrl: (projectId: number) => `/api/reports/project/${projectId}/status.pdf`,
   portfolioPdfUrl: (portfolioId: number | 'all') => `/api/reports/portfolio/${portfolioId}/briefing.pdf`,
 }
